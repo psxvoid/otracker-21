@@ -156,25 +156,25 @@ div:has(.block-language-habittracker),
 	border: var(--habit-outer-border);
 	border-radius: var(--radius-s);
 	overflow-x: scroll;
-	width: fit-content;
+	width: 100%;
 	max-width: 100%;
 	scrollbar-width: thin;
+	box-sizing: border-box;
 }
 
 .habit-tracker {
 	display: grid;
-	grid-template-columns: 1fr repeat(
-			var(--date-columns),
-			var(--habit-cell-width)
-		);
-	width: fit-content;
+	grid-template-columns:
+		calc(100% - (var(--date-columns) * var(--habit-cell-width)))
+		repeat(var(--date-columns), var(--habit-cell-width));
+	width: 100%;
 	background-color: var(--habit-bg);
 }
 
 .is-readable-line-width .habit-tracker--match-line-length {
-	min-width: calc(
-		var(--file-line-width) - 2px
-	); /* TODO: this is a hack since I know the widht of the border. but it won't scale. figure out a way to fix this that hopefully doesn't break overrides people added in place */
+	min-width: unset;
+	width: 100%;
+	max-width: var(--file-line-width);
 }
 
 .habit-tracker__row {
@@ -206,6 +206,7 @@ div:has(.block-language-habittracker),
 .habit-tracker__cell--name {
 	padding: 0 var(--habit-name-padding);
 	width: 100%;
+	min-width: 40px;
 	max-width: var(--habit-name-max-width);
 	justify-content: start;
 	position: sticky;
