@@ -30,6 +30,7 @@ div:has(.block-language-habittracker),
 	--habit-cell-width: 25px;
 	--habit-cell-height: 32px;
 	--habit-name-max-width: 173px;
+	--habit-name-min-width: 80px; /* Set an arbitrary minimum limit for name cell width. The value can be changed, but it is necessary*/
 	--habit-name-padding: 8px;
 
 	/* Tick size */
@@ -162,18 +163,43 @@ div:has(.block-language-habittracker),
 	box-sizing: border-box;
 }
 
+
+/* 
+Break the 700px limit on the block language element 
+Applies for the case: 
+"editor/Readable line length" toggled off
+"plugin/Match line length" toggled on
+*/
+body:not(.is-readable-line-width) .block-language-habittracker:has(.habit-tracker--match-line-length) {
+    display: flex !important;
+    width: 100% !important;
+    max-width: 100% !important; /* Main fix 1: scales the whole block accordingly when readable line length is off */ 
+    overflow-x: auto !important; /* Handle scroll correctly if window shrinks */
+}
+
 .habit-tracker {
 	display: grid;
 	grid-template-columns:
-		calc(100% - (var(--date-columns) * var(--habit-cell-width)))
-		repeat(var(--date-columns), var(--habit-cell-width));
+		minmax(var(--habit-name-min-width), calc(100% - (var(--date-columns) * var(--habit-cell-width))))
+        repeat(var(--date-columns), var(--habit-cell-width)) !important;
+		
 	width: 100%;
+	min-width: max-content; /* Main fix 2: Makes habit name cells truly sticky. Now when window is shrinked, the dates do not slide behind the name cells */
 	background-color: var(--habit-bg);
 }
 
 .is-readable-line-width .habit-tracker--match-line-length {
-	min-width: unset;
+	/* 
+	Main fix 3: following 3 lines concerning the display property basically do for the case where both settings RLL and MLL are toggled on, 
+	what Main fix 2 does for the other cases
+	*/
+	display: grid !important;
+    grid-template-columns: 
+        minmax(var(--habit-name-min-width), calc(var(--file-line-width) - (var(--date-columns) * var(--habit-cell-width))))
+        repeat(var(--date-columns), var(--habit-cell-width)) !important;
+
 	width: 100%;
+	min-width: max-content; /* Not sure if necessary. No harm, but potential good */
 	max-width: var(--file-line-width);
 }
 
@@ -200,14 +226,17 @@ div:has(.block-language-habittracker),
 .habit-tracker__row:not(.habit-tracker__header) .habit-tracker__cell {
 	border-top: var(--habit-horizontal-border);
 }
+
 /*
 */
 
 .habit-tracker__cell--name {
 	padding: 0 var(--habit-name-padding);
 	width: 100%;
-	min-width: 40px;
-	max-width: var(--habit-name-max-width);
+	min-width: var(--habit-name-min-width);
+	max-width: auto; /* Main fix 4: This should totally be auto, to prevent the big white blank area between name cells and the tick boxes. It should not be constant */
+
+	box-sizing: border-box;
 	justify-content: start;
 	position: sticky;
 	left: 0;
@@ -225,10 +254,21 @@ div:has(.block-language-habittracker),
 	font-size: var(--habit-name-font-size);
 	text-decoration: none;
 }
-.is-readable-line-width
-	.habit-tracker--match-line-length
+
+.is-readable-line-width 
+	.habit-tracker--match-line-length 
 	.habit-tracker__cell--name {
-	max-width: 100%;
+	padding: 0 var(--habit-name-padding);
+	width: 100%;
+
+	box-sizing: border-box;
+	z-index: 10;
+	justify-content: start;
+	position: sticky;
+	left: 0;
+	background-color: var(--habit-highlight-names);
+
+
 }
 
 .habit-tracker__cell--saturday,
