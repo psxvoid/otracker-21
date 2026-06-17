@@ -1,6 +1,6 @@
 
 export class DebugLog {
-	static pluginName: string = 'Habit Tracker 21'
+	static pluginName: string = 'OTracker 21'
 
 	constructor(private getSettings: () => { debug: boolean }) {
 	}

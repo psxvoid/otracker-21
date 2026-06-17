@@ -1,6 +1,6 @@
-# 🧪 Habit Tracker Test Dashboard
+# 🧪 OTracker Test Dashboard
 
-This vault tests all functionality of the Habit Tracker 21 plugin.
+This vault tests all functionality of the OTracker 21 plugin.
 
 ## 📋 Quick Tests
 

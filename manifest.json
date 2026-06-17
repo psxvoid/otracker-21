@@ -1,11 +1,10 @@
 {
-	"id": "habit-tracker-21",
-	"name": "Habit Tracker 21",
-	"version": "2.4.1",
+	"id": "otracker-21",
+	"name": "OTracker 21",
+	"version": "2.4.2-0.0.1",
 	"minAppVersion": "1.1.0",
-	"description": "Your 21-day journey to habit formation, simplified",
-	"author": "zincplusplus",
-	"authorUrl": "https://github.com/zincplusplus",
-	"isDesktopOnly": false,
-	"fundingUrl": "https://buymeacoffee.com/zincplusplus"
+	"description": "Fork of the Habit Tracker 21 with some customizations.",
+	"author": "zincplusplus (feat psxvoid)",
+	"authorUrl": "https://github.com/psxvoid",
+	"isDesktopOnly": false
 }

@@ -1,10 +1,10 @@
-# 🧪 Habit Tracker Test Vault
+# 🧪 OTracker Test Vault
 
-This vault provides comprehensive testing for the Habit Tracker 21 plugin.
+This vault provides comprehensive testing for the OTracker 21 plugin.
 
 ## 🎯 How to Use This Test Vault
 
-1. **Install the Plugin**: Install Habit Tracker 21 in this vault
+1. **Install the Plugin**: Install OTracker 21 in this vault
 2. **Open Test Dashboard**: Start with `🧪 Test Dashboard.md`
 3. **Run Through Tests**: Follow the checklists in each test file
 4. **Report Issues**: Document any bugs or unexpected behavior
