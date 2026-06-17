@@ -2,10 +2,12 @@
 import {Plugin, Notice, setIcon, App, PluginSettingTab, Setting} from 'obsidian'
 import HabitTracker from './HabitTracker.svelte'
 import HabitTrackerError from './HabitTrackerError.svelte'
-import { debugLog, isValidCSSColor } from './utils'
+import { getDateAsString, isValidCSSColor } from './utils'
+import { DebugLog } from './debugHelpers'
 
 	import {
 		format,
+		parse,
 	} from 'date-fns'
 
 interface HabitTrackerSettings {
@@ -17,6 +19,8 @@ interface HabitTrackerSettings {
 	showStreaks: boolean;
 	openDailyNoteOnClick: boolean;
 	gapStyle: string;
+	updateCheckEnabled: boolean;
+	useDailyNoteDate: boolean;
 }
 
 const DEFAULT_SETTINGS: HabitTrackerSettings = {
@@ -27,38 +31,139 @@ const DEFAULT_SETTINGS: HabitTrackerSettings = {
 	defaultColor: '',
 	showStreaks: true,
 	openDailyNoteOnClick: true,
-	gapStyle: 'default'
+	gapStyle: 'default',
+	updateCheckEnabled: false,
+	useDailyNoteDate: true,
+}
+
+const getDailyNoteFormat = (app: App) => {
+
+	const dailyNotesPlugin = (app as any).internalPlugins?.plugins["daily-notes"]?.instance
+
+	if (typeof dailyNotesPlugin.getFormat === 'function') {
+		const dailyNoteFormat = dailyNotesPlugin.getFormat()
+
+		if (typeof dailyNoteFormat === 'string') {
+			return dailyNoteFormat
+		}
+
+		return 'YYYY-MM-DD'
+	}
+
+}
+
+const getCurrentDailyNoteDate = (app: App, sourcePath: string, logger: DebugLog): { success: false, errorMessage: string, exception?: unknown } | { success: true, date: Date } => {
+	const dailyNotesPlugin = (app as any).internalPlugins?.plugins["daily-notes"]?.instance
+
+	if (typeof dailyNotesPlugin.getCurrentFileDateTimestamp === 'function') {
+		const dailyNoteTimestamp = dailyNotesPlugin.getCurrentFileDateTimestamp() // ?: use format + ctx.sourceFile.baseName
+
+		if (typeof dailyNoteTimestamp === 'number') {
+			return {
+				success: true,
+				date: new Date(dailyNoteTimestamp)
+			}
+		}
+	}
+
+	logger.debugLog(`Unable to get daily note date from daily note plugin. Trying with a specific format.`)
+	let dailyNoteDateFormatDebug: string | undefined
+
+	try {
+		const dailyNoteDateFormat = getDailyNoteFormat(app)
+		dailyNoteDateFormatDebug = dailyNoteDateFormat
+
+		if (typeof dailyNoteDateFormat !== 'string') {
+			throw new Error("Unable to get daily note date format.")
+		}
+
+		const sourceFile = app.vault.getFileByPath(sourcePath)
+
+		if (sourceFile != null) {
+			const fileNameWithoutExtension = sourceFile.basename
+			const dailyNoteDate = parse(fileNameWithoutExtension, dailyNoteDateFormat, new Date())
+
+			if (!(dailyNoteDate instanceof Date)) {
+				throw new Error("Unable to parse daily note date with date-fns.")
+			}
+
+			return {
+				success: true,
+				date: dailyNoteDate
+			}
+		}
+	} catch (error: unknown) {
+		return { success: false, errorMessage: `Date parse exception (format: ${dailyNoteDateFormatDebug}).`, exception: error }
+	}
+
+	return { success: false, errorMessage: 'Unable to get a daily note date (not a daily note?).' }
 }
 
 export default class HabitTracker21 extends Plugin {
 	settings: HabitTrackerSettings;
+	private logger: DebugLog = new DebugLog(() => this.settings);
 
 	async onload() {
 		await this.loadSettings();
 
-		this.registerMarkdownCodeBlockProcessor('habittracker', async (src, el) => {
+		this.registerMarkdownCodeBlockProcessor('habittracker', async (src, el, ctx) => {
 			// const trackingPixel = document.createElement('img')
 			// trackingPixel.setAttribute('src', 'https://bit.ly/habitttracker21-140')
 			// if (el.parentElement) el.parentElement.appendChild(trackingPixel)
 			// TODO make this dynamic and add it to HabitTracker.svelte
 
-			debugLog('Loading', 1)
+			this.logger.debugLog('Loading')
+
+			const parseDailyNoteDate = (mergedSettings: HabitTrackerSettings): { parsed: false } | { parsed: true, date: Date } => {
+				if (!mergedSettings.useDailyNoteDate) {
+					return { parsed: false }
+				}
+
+				const dateParseResult = getCurrentDailyNoteDate(this.app, ctx.sourcePath, this.logger)
+
+				if (dateParseResult.success) {
+					return { parsed: true, date: dateParseResult.date }
+				}
+
+				this.logger.debugLog(dateParseResult.errorMessage)
+
+				if (dateParseResult.exception != null) {
+					this.logger.debugLog(`Parse exception ${dateParseResult.exception}`)
+				}
+
+				return { parsed: false }
+			}
+
+
 
 			let userSettings: Partial<HabitTrackerSettings> = {}
 			try {
 				userSettings = JSON.parse(src);
-				const debugMode = this.settings.debug || userSettings.debug;
-				debugLog(`Global settings: ${JSON.stringify(this.settings)}`, debugMode);
-				debugLog(`Tracker settings: ${JSON.stringify(userSettings)}`, debugMode);
-				debugLog(`Today is ${format(new Date(), 'yyyy-MM-dd')}`, debugMode);
+
+				const mergedSettings = {
+					...this.settings,
+					...userSettings
+				}
+
+				const dailyNoteDateParseResult = parseDailyNoteDate(mergedSettings)
+				const today = dailyNoteDateParseResult.parsed ? dailyNoteDateParseResult.date : new Date();
+
+				this.logger.debugLog(`Global settings: ${JSON.stringify(this.settings)}`);
+				this.logger.debugLog(`Tracker settings: ${JSON.stringify(userSettings)}`);
+				this.logger.debugLog(`Today is ${format(today, 'yyyy-MM-dd')}`);
 				new HabitTracker({
 						target: el,
 						props: {
 							app: this.app,
 							userSettings,
-							globalSettings: this.settings,
+							globalSettings: {
+								...this.settings,
+								...(dailyNoteDateParseResult.parsed
+									? { lastDisplayedDate: getDateAsString(today) }
+									: { })
+								},
 							pluginName: this.manifest.name,
-						},
+						}
 					})
 			} catch(error) {
 				new HabitTrackerError({
@@ -71,7 +176,7 @@ export default class HabitTracker21 extends Plugin {
 						globalSettings: this.settings
 					}
 				})
-				console.error(`[${this.manifest.name}] Received invalid settings. ${error}`)
+				this.logger.debugError(`Received invalid settings`, error as Error)
 			}
 		})
 
@@ -79,7 +184,9 @@ export default class HabitTracker21 extends Plugin {
 		this.addHoverActionBars()
 
 		// Check for updates in background (after a short delay)
-		setTimeout(() => this.checkForUpdatesBackground(), 5000)
+		if (this.settings.updateCheckEnabled) {
+			setTimeout(() => this.checkForUpdatesBackground(), 5000)
+		}
 
 		// Add the settings tab
 		this.addSettingTab(new HabitTrackerSettingTab(this.app, this));
@@ -90,20 +197,21 @@ export default class HabitTracker21 extends Plugin {
 	}
 
 	async saveSettings() {
-		console.log('[HabitTracker] Saving settings:', this.settings);
+		this.logger.debugLog('Saving settings...');
 		await this.saveData(this.settings);
+		
 		// Refresh all habit tracker instances when settings change
 		this.refreshAllHabitTrackers();
 	}
 
 	refreshAllHabitTrackers() {
 		// Dispatch a single event at the document level that all components can listen to
-		console.log('[HabitTracker] Dispatching refresh event with settings:', this.settings);
+		this.logger.debugLog('Dispatching refresh event with settings...');
 		const refreshEvent = new CustomEvent('habit-tracker-refresh', {
 			detail: { settings: this.settings }
 		});
 		document.dispatchEvent(refreshEvent);
-		console.log('[HabitTracker] Refresh event dispatched');
+		this.logger.debugLog(' Refresh event dispatched...');
 	}
 
 	addHoverActionBars() {
@@ -116,7 +224,9 @@ export default class HabitTracker21 extends Plugin {
 
 			if (codeBlock && !codeBlock.querySelector('.ht21-action-bar')) {
 				// Check for updates when creating new action bars
-				this.checkForUpdatesBackground()
+				if (this.settings.updateCheckEnabled) {
+						this.checkForUpdatesBackground()
+				}
 
 				const actionBar = this.createActionBar(codeBlock)
 				codeBlock.appendChild(actionBar)
@@ -235,20 +345,20 @@ export default class HabitTracker21 extends Plugin {
 			// Store check timestamp
 			localStorage.setItem('habit-tracker-last-update-check', Date.now().toString())
 
-			console.log('Debug - latestVersion:', latestVersion)
-			console.log('Debug - currentVersion:', currentVersion)
+			this.logger.debugLog('Update check - latestVersion:')
+			this.logger.debugLog('Update check - currentVersion:')
 			const isNewer = this.isNewerVersion(latestVersion, currentVersion)
-			console.log('Debug - isNewerVersion result:', isNewer)
+			this.logger.debugLog('Update check - isNewerVersion result:')
 
 			if (isNewer) {
 				localStorage.setItem('habit-tracker-update-available', latestVersion)
-				console.log('Debug - Stored update available:', latestVersion)
+				this.logger.debugLog(`Update check - Stored update available: ${latestVersion}`)
 			} else {
-				console.log('Debug - No update needed, removing localStorage entry')
+				this.logger.debugLog('Update check - No update needed')
 				localStorage.removeItem('habit-tracker-update-available')
 			}
 		} catch (error) {
-			console.log('Update check failed:', error)
+			this.logger.debugError('Update check failed')
 		}
 	}
 
@@ -367,6 +477,16 @@ class HabitTrackerSettingTab extends PluginSettingTab {
 						this.plugin.settings.defaultColor = value;
 						await this.plugin.saveSettings();
 					}
+				}));
+
+		new Setting(containerEl)
+			.setName('Infer last date')
+			.setDesc('Infer last date to display from a daily note base name. Should match "daily notes" core plugin format or "YYYY-MM-DD."')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.useDailyNoteDate)
+				.onChange(async (value) => {
+					this.plugin.settings.useDailyNoteDate = value;
+					await this.plugin.saveSettings();
 				}));
 
 		new Setting(containerEl)

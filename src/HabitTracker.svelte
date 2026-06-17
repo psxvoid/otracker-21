@@ -59,6 +59,7 @@
 	export let globalSettings: {
 		path: string
 		firstDisplayedDate: string
+		lastDisplayedDate: string
 		daysToShow: number
 		debug: boolean
 		matchLineLength: boolean
@@ -113,7 +114,7 @@
 
 		// Smart date/daysToShow logic: explicit user settings take priority
 		const hasExplicitFirstDate = userSettings.firstDisplayedDate !== undefined
-		const hasExplicitLastDate = userSettings.lastDisplayedDate !== undefined
+		const hasExplicitLastDate = userSettings.lastDisplayedDate !== undefined || globalSettings.lastDisplayedDate != undefined
 		const hasExplicitDaysToShow = userSettings.daysToShow !== undefined
 
 		// Start with defaults
@@ -121,7 +122,7 @@
 			path: userSettings.path || state.settings.path,
 			firstDisplayedDate: '',
 			lastDisplayedDate:
-				userSettings.lastDisplayedDate || state.settings.lastDisplayedDate,
+				userSettings.lastDisplayedDate || globalSettings.lastDisplayedDate || state.settings.lastDisplayedDate,
 			daysToShow:
 				userSettings.daysToShow !== undefined
 					? userSettings.daysToShow
