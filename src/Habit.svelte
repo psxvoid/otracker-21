@@ -8,44 +8,45 @@
 	import { differenceInCalendarDays, parseISO, format } from 'date-fns'
 	import { EntryType, HabitEntry, HabitEntryUtils, HabitEntryWithCounter, parseEntry, serializeEntry } from './HabitEntry'
 	import { DateUtils } from './DateUtils'
+	import { ClickMode, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings } from './settings'
 
 	export let app
 	export let name
 	export let path
 	export let dates
 	export let pluginName
-	export let userSettings
-	export let globalSettings
-
+	export let userSettings: Partial<HabitTrackerSettings>
+	export let globalSettings: HabitTrackerSettings
+	
 	let entries: HabitEntry[] = []
-	let frontmatter: { entries: readonly string[] } = { entries: [] }
+	let frontmatter: { entries: readonly string[], color?: string, maxGap?: number, title?: string } = { entries: [] }
 	let habitName = name
 	let customStyles = ''
 	let savingChanges = false // this helps the file change listner know if we made a change. if not, it reloads the data for the habit
 	let logger = new DebugLog(() => globalSettings, 'Habit')
+	let mergedSettings: HabitTrackerMergedSettings
+
+	const enum ClickAction {
+		TickIncrement,
+		Toggle
+	}
 
 	// Reactive color resolution - updates whenever frontmatter, userSettings, or globalSettings change
 	$: {
-		const resolvedColor =
-			frontmatter.color || userSettings.color || globalSettings.defaultColor
+		mergedSettings = mergeSettings(globalSettings, userSettings)
+		const resolvedColor = frontmatter.color || mergedSettings.color
 		if (resolvedColor && isValidCSSColor(resolvedColor)) {
 			customStyles = `--habit-bg-ticked: ${resolvedColor}`
 		} else {
 			customStyles = ''
 		}
 	}
-	$: showStreaks =
-		userSettings.showStreaks !== undefined
-			? userSettings.showStreaks
-			: globalSettings.showStreaks
+	$: showStreaks = mergedSettings.showStreaks
 
 	$: renderedDates = (() => {
 		const maxGap = Number(frontmatter.maxGap) || 0
 		const entrySet = new Set(entries.map(x => DateUtils.serializeDashedYYYYMMDD(x.date)))
-		const gapStyle =
-			userSettings.gapStyle !== undefined
-				? userSettings.gapStyle
-				: globalSettings.gapStyle
+		const gapStyle = mergedSettings.gapStyle
 				
 		// Pass 1 — mark each date
 		const days = dates.map((date) => {
@@ -265,6 +266,25 @@
 
 		logger.debugLog(`Habit "${habitName}": Found ${entries.length} entries`)
 		logger.debugLog(entries)
+		mergedSettings = mergeSettings(globalSettings, userSettings)
+	}
+
+	function getClickAction(params: { isShiftPressed: boolean }): ClickAction {
+		if (mergedSettings.clickMode === ClickMode.ClickIncreasesTickCount) {
+			if (!params.isShiftPressed) {
+				return ClickAction.TickIncrement
+			} else {
+				return ClickAction.Toggle
+			}
+		} else if (mergedSettings.clickMode === ClickMode.ClickToggleTick) {
+			if (!params.isShiftPressed) {
+				return ClickAction.Toggle
+			} else {
+				return ClickAction.TickIncrement
+			}
+		} else {
+			throw new Error('Unknown click mode.')
+		}
 	}
 
 	const toggleHabit = function (e: MouseEvent & KeyboardEvent, date: string) {
@@ -280,13 +300,14 @@
 
 		let newEntries: HabitEntry[] = [...entries]
 
+		const clickAction = getClickAction({ isShiftPressed: e.shiftKey })
+
 		if (existingEntry != null) {
-			
-			if (e.shiftKey) {
-				logger.debugLog('Click+shift...')
+			if (clickAction === ClickAction.Toggle) {
+				logger.debugLog('Untick...')
 				newEntries = newEntries.filter(e => !HabitEntryUtils.equal(e, existingEntry))
 			} else {
-				logger.debugLog('Click...')
+				logger.debugLog('Tick...')
 				if (existingEntry.type === EntryType.Counter) {
 			    logger.debugLog(`Incrementing counter (was: ${existingEntry.counter})`)
 					existingEntry.counter = existingEntry.counter + 1
