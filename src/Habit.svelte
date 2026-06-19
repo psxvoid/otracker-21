@@ -343,6 +343,17 @@
 	const onKeyUpDown = (e: KeyboardEvent) => {
 		isShiftPressed = e.shiftKey
 	}
+
+	const registerKeyListener = (e: MouseEvent) => {
+		document.addEventListener('keydown', onKeyUpDown)
+		document.addEventListener('keyup', onKeyUpDown)
+	}
+
+	const unregisterKeyListener = (e: MouseEvent) => {
+		document.removeEventListener('keydown', onKeyUpDown)
+		document.removeEventListener('keyup', onKeyUpDown)
+	}
+
 </script>
 
 <!-- <div bind:this={rootElement}> -->
@@ -364,11 +375,9 @@
 			<div
 				class={day.classes}
 				ticked={day.ticked}
-				on:mouseenter={(e) => showTooltip(e, day)}
-				on:mouseleave={hideTooltip}
+				on:mouseenter={(e) => { showTooltip(e, day); registerKeyListener(e); } }
+				on:mouseleave={(e) => { hideTooltip(); unregisterKeyListener(e); } }
 				on:click={() => toggleHabit(day.date)}
-				on:keydown={onKeyUpDown}
-				on:keyup={onKeyUpDown}
 			>
 				<span
 					class="habit-tick__inner"
