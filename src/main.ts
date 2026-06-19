@@ -9,32 +9,7 @@ import { DebugLog } from './debugHelpers'
 		format,
 		parse,
 	} from 'date-fns'
-
-interface HabitTrackerSettings {
-	path: string;
-	daysToShow: number;
-	debug: boolean;
-	matchLineLength: boolean;
-	defaultColor: string;
-	showStreaks: boolean;
-	openDailyNoteOnClick: boolean;
-	gapStyle: string;
-	updateCheckEnabled: boolean;
-	useDailyNoteDate: boolean;
-}
-
-const DEFAULT_SETTINGS: HabitTrackerSettings = {
-	path: '',
-	daysToShow: 21,
-	debug: false,
-	matchLineLength: true,
-	defaultColor: '',
-	showStreaks: true,
-	openDailyNoteOnClick: true,
-	gapStyle: 'default',
-	updateCheckEnabled: false,
-	useDailyNoteDate: true,
-}
+import { ClickMode, DEFAULT_SETTINGS, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings } from './settings'
 
 const getDailyNoteFormat = (app: App) => {
 
@@ -114,7 +89,7 @@ export default class HabitTracker21 extends Plugin {
 
 			this.logger.debugLog('Loading')
 
-			const parseDailyNoteDate = (mergedSettings: HabitTrackerSettings): { parsed: false } | { parsed: true, date: Date } => {
+			const parseDailyNoteDate = (mergedSettings: HabitTrackerMergedSettings): { parsed: false } | { parsed: true, date: Date } => {
 				if (!mergedSettings.useDailyNoteDate) {
 					return { parsed: false }
 				}
@@ -140,10 +115,7 @@ export default class HabitTracker21 extends Plugin {
 			try {
 				userSettings = JSON.parse(src);
 
-				const mergedSettings = {
-					...this.settings,
-					...userSettings
-				}
+				const mergedSettings = mergeSettings(this.settings, userSettings)
 
 				const dailyNoteDateParseResult = parseDailyNoteDate(mergedSettings)
 				const today = dailyNoteDateParseResult.parsed ? dailyNoteDateParseResult.date : new Date();
@@ -508,6 +480,18 @@ class HabitTrackerSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.gapStyle)
 				.onChange(async (value) => {
 					this.plugin.settings.gapStyle = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Click mode')
+			.setDesc('Changes how clicking on habits is interpreted.\nDefault = clicking increments the tick counter, shift+click = unticks.\nToggle = clicking toggles tick, shift+click increments the tick counter. ')
+			.addDropdown(dropdown => dropdown
+				.addOption(ClickMode.ClickIncreasesTickCount, 'Default')
+				.addOption(ClickMode.ClickToggleTick, 'Toggle')
+				.setValue(this.plugin.settings.clickMode)
+				.onChange(async (value) => {
+					this.plugin.settings.clickMode = value as ClickMode;
 					await this.plugin.saveSettings();
 				}));
 

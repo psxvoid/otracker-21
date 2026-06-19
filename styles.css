@@ -377,7 +377,7 @@ div:has(.block-language-habittracker),
 	pointer-events: none;
 	position: fixed;
 	transform: translate(-50%, -100%);
-	white-space: nowrap;
+	white-space: pre;
 	z-index: 1000;
 }
 
