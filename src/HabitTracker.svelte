@@ -34,7 +34,6 @@
 	interface HabitData {
 		[x: string]: any
 		file: TFile
-		entries: string[]
 	}
 
 	interface ComputedState {

@@ -1,21 +1,31 @@
 
 export class DebugLog {
-	static pluginName: string = 'OTracker 21'
+	static defaultPrefix = `[OTracker 21]`
 
-	constructor(private getSettings: () => { debug: boolean }) {
+	private prefix?: string
+
+	constructor(private getSettings: () => { debug: boolean }, prefix?: string) {
+		this.prefix = prefix == null
+			? DebugLog.defaultPrefix
+			: `${DebugLog.defaultPrefix} [${prefix}]`
 	}
 
-	debugLog(message: string) {
+	debugLog(messageOrObject: string | object) {
 		const settings = this.getSettings()
-		if (settings && !settings.debug) {
+		if (settings == null || !settings.debug) {
 			return	
 		}
 
-		console.log(`[${DebugLog.pluginName}]`, message);
+		if (typeof messageOrObject === 'string') {
+			console.log(`${this.prefix}`, messageOrObject);
+			return
+		}
+
+		console.log(messageOrObject);
 	}
 
 	debugError(message: string, error?: unknown) {
-		console.error(`${DebugLog.pluginName} error: ${message}`)
+		console.error(`${this.prefix} error: ${message}`)
 
 		if (error != null) {
 			console.error(error)

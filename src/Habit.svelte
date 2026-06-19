@@ -1,25 +1,29 @@
-<script>
-	import {debugLog, isValidCSSColor} from './utils'
+<script lang="ts">
+	import { isValidCSSColor } from './utils'
 
 	import {onDestroy} from 'svelte'
 	import {parseYaml, TFile} from 'obsidian'
 	import {getDayOfTheWeek} from './utils'
-	import {differenceInCalendarDays, parseISO, format} from 'date-fns'
+	import { DebugLog } from './debugHelpers'
+	import { differenceInCalendarDays, parseISO, format } from 'date-fns'
+	import { EntryType, HabitEntry, HabitEntryUtils, HabitEntryWithCounter, parseEntry, serializeEntry } from './HabitEntry'
+	import { DateUtils } from './DateUtils'
 
 	export let app
 	export let name
 	export let path
 	export let dates
-	export let debug
 	export let pluginName
 	export let userSettings
 	export let globalSettings
 
-	let entries = []
-	let frontmatter = {}
+	let entries: HabitEntry[] = []
+	let frontmatter: { entries: readonly string[] } = { entries: [] }
 	let habitName = name
 	let customStyles = ''
 	let savingChanges = false // this helps the file change listner know if we made a change. if not, it reloads the data for the habit
+	let logger = new DebugLog(() => globalSettings, 'Habit')
+	let isShiftPressed = false
 
 	// Reactive color resolution - updates whenever frontmatter, userSettings, or globalSettings change
 	$: {
@@ -38,22 +42,22 @@
 
 	$: renderedDates = (() => {
 		const maxGap = Number(frontmatter.maxGap) || 0
-		const entrySet = new Set(entries)
+		const entrySet = new Set(entries.map(x => DateUtils.serializeDashedYYYYMMDD(x.date)))
 		const gapStyle =
 			userSettings.gapStyle !== undefined
 				? userSettings.gapStyle
 				: globalSettings.gapStyle
-
+				
 		// Pass 1 — mark each date
 		const days = dates.map((date) => {
-			const ticked = entrySet.has(date)
+			const ticked = entrySet.has(date) // TODO: also read tick count
 			let gap = false
 			if (!ticked && maxGap > 0) {
 				// Gap only between consecutive entries whose gap ≤ maxGap
 				const parsed = parseISO(date)
 				for (let i = 0; i < entries.length - 1; i++) {
-					const prev = parseISO(entries[i])
-					const next = parseISO(entries[i + 1])
+					const prev = entries[i].date
+					const next = entries[i + 1].date
 					if (
 						differenceInCalendarDays(parsed, prev) > 0 &&
 						differenceInCalendarDays(next, parsed) > 0
@@ -101,13 +105,14 @@
 				// streakStart: only if the streak truly begins here
 				// (no entry within maxGap before the first visible date)
 				if (firstTickDate) {
-					const firstTickIdx = entries.indexOf(firstTickDate)
+					const entryToFind = parseEntry(firstTickDate)
+					const firstTickIdx = HabitEntryUtils.indexOf(entries, entryToFind)
 					const prevEntry = firstTickIdx > 0 ? entries[firstTickIdx - 1] : null
 					const continuesFromBefore =
 						prevEntry &&
 						differenceInCalendarDays(
-							parseISO(firstTickDate),
-							parseISO(prevEntry),
+							entryToFind.date,
+							prevEntry.date,
 						) -
 							1 <=
 							maxGap
@@ -120,14 +125,15 @@
 
 				// streakEnd: only if the streak truly ends within the visible range
 				if (lastTickDate) {
-					const lastTickIdx = entries.indexOf(lastTickDate)
+					const entryToFind = parseEntry(lastTickDate)
+					const lastTickIdx = HabitEntryUtils.indexOf(entries, entryToFind)
 					const nextEntry =
 						lastTickIdx < entries.length - 1 ? entries[lastTickIdx + 1] : null
 					const continuesAfter =
 						nextEntry &&
 						differenceInCalendarDays(
-							parseISO(nextEntry),
-							parseISO(lastTickDate),
+							nextEntry.date,
+							entryToFind.date,
 						) -
 							1 <=
 							maxGap
@@ -141,14 +147,15 @@
 				// Count: walk backward through entries from the last visible tick
 				let count = 0
 				if (lastTickDate) {
-					const anchorIdx = entries.indexOf(lastTickDate)
+					const entryToFind = parseEntry(lastTickDate)
+					const anchorIdx = HabitEntryUtils.indexOf(entries, entryToFind)
 					if (anchorIdx !== -1) {
 						count = 1
 						for (let j = anchorIdx; j > 0; j--) {
 							const gapDays =
 								differenceInCalendarDays(
-									parseISO(entries[j]),
-									parseISO(entries[j - 1]),
+									entries[j].date,
+									entries[j - 1].date,
 								) - 1
 							if (gapDays > maxGap) break
 							count++
@@ -167,7 +174,7 @@
 			const today = format(new Date(), 'yyyy-MM-dd')
 			const lastEntry = entries[entries.length - 1]
 			const deadlineDate = format(
-				new Date(parseISO(lastEntry).getTime() + (maxGap + 1) * 86400000),
+				new Date(lastEntry.date.getTime() + (maxGap + 1) * 86400000),
 				'yyyy-MM-dd',
 			)
 			if (deadlineDate >= today) {
@@ -206,19 +213,14 @@
 	})()
 
 	const init = async function () {
-		debugLog(`Loading habit ${habitName}`, debug, undefined, pluginName)
+		logger.debugLog(`Loading habit ${habitName}`)
 
-		const getFrontmatter = async function (path) {
+		const getFrontmatter = async function (path): Promise<{ entries: readonly string[] }> {
 			const file = this.app.vault.getAbstractFileByPath(path)
 
 			if (!file || !(file instanceof TFile)) {
-				debugLog(
-					`No file found for path: ${path}`,
-					debug,
-					undefined,
-					pluginName,
-				)
-				return {}
+				logger.debugLog(`No file found for path: ${path}`)
+				return { entries: [] }
 			}
 
 			try {
@@ -226,7 +228,7 @@
 					const frontmatter = result.split('---')[1]
 
 					if (!frontmatter) {
-						return {entries: []}
+						return { entries: [] }
 					}
 					const fmParsed = parseYaml(frontmatter)
 					if (fmParsed['entries'] == undefined) {
@@ -236,46 +238,66 @@
 					return fmParsed
 				})
 			} catch (error) {
-				debugLog(
-					`Error in habit ${habitName}: error.message`,
-					debug,
-					undefined,
-					pluginName,
-				)
-				return {}
+				logger.debugLog(`Error in habit ${habitName}: error.message`)
+				return { entries: [] }
 			}
 		}
 
 		frontmatter = await getFrontmatter(path)
-		debugLog(`Frontmatter for ${path} ↴`, debug)
-		debugLog(frontmatter, debug)
-		entries = frontmatter.entries
-		entries = entries.sort()
+		logger.debugLog(`Frontmatter for ${path} ↴`)
+		logger.debugLog(frontmatter)
+		entries = frontmatter.entries.map(entryStr => parseEntry(entryStr))
+		entries = entries.sort(HabitEntryUtils.defaultComparer)
 		habitName = frontmatter.title || habitName
 
-		debugLog(`Habit "${habitName}": Found ${entries.length} entries`, debug)
-		debugLog(entries, debug, undefined, pluginName)
+		logger.debugLog(`Habit "${habitName}": Found ${entries.length} entries`)
+		logger.debugLog(entries)
 	}
 
-	const toggleHabit = function (date) {
+	const toggleHabit = function (date: string) {
 		const file = this.app.vault.getAbstractFileByPath(path)
 		if (!file || !(file instanceof TFile)) {
 			new Notice(`${pluginName}: file missing while trying to toggle habit`)
 			return
 		}
 
-		let newEntries = [...entries]
-		if (entries.includes(date)) {
-			newEntries = newEntries.filter((e) => e !== date)
+		const parsedEntry: HabitEntry = parseEntry(date)
+		const existingEntry = entries.find(x => HabitEntryUtils.equal(x, parsedEntry))
+		logger.debugLog(`Existing entry was ${existingEntry == null ? 'not' : ''} found...`)
+
+		let newEntries: HabitEntry[] = [...entries]
+
+		if (existingEntry != null) {
+			
+			if (isShiftPressed) {
+				logger.debugLog('Click+shift...')
+				newEntries = newEntries.filter(e => !HabitEntryUtils.equal(e, existingEntry))
+			} else {
+				logger.debugLog('Click...')
+				if (existingEntry.type === EntryType.Counter) {
+			    logger.debugLog(`Incrementing counter (was: ${existingEntry.counter})`)
+					existingEntry.counter = existingEntry.counter + 1
+				} else {
+			    logger.debugLog(`Promoting an entry to the counter.`);
+					(existingEntry as unknown as any).type = EntryType.Counter;
+					(existingEntry as unknown as HabitEntryWithCounter).counter = 2
+				}
+			}
 		} else {
-			newEntries.push(date)
+			logger.debugLog(`Adding a new entry: ${JSON.stringify(parsedEntry)}`)
+			newEntries.push(parsedEntry)
 		}
-		entries = newEntries.sort()
+
+		entries = newEntries.sort(HabitEntryUtils.defaultComparer)
+		logger.debugLog(`Updated entries`)
+		logger.debugLog(entries)
 
 		savingChanges = true
 
+		const entriesSerialized = entries.map(x => serializeEntry(x))
+
 		this.app.fileManager.processFrontMatter(file, (frontmatter) => {
-			frontmatter['entries'] = entries
+			frontmatter['entries'] = entriesSerialized
 		})
 	}
 
@@ -317,6 +339,10 @@
 		app.vault.offref(modifyRef)
 		hideTooltip()
 	})
+
+	const onKeyUpDown = (e: KeyboardEvent) => {
+		isShiftPressed = e.shiftKey
+	}
 </script>
 
 <!-- <div bind:this={rootElement}> -->
@@ -341,6 +367,8 @@
 				on:mouseenter={(e) => showTooltip(e, day)}
 				on:mouseleave={hideTooltip}
 				on:click={() => toggleHabit(day.date)}
+				on:keydown={onKeyUpDown}
+				on:keyup={onKeyUpDown}
 			>
 				<span
 					class="habit-tick__inner"
