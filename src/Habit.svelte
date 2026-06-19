@@ -50,23 +50,36 @@
 				
 		// Pass 1 — mark each date
 		const days = dates.map((date) => {
-			const ticked = entrySet.has(date) // TODO: also read tick count
+			const ticked = entrySet.has(date)
+			const dateParsed = parseEntry(date)
+
 			let gap = false
+			let habitCount = 0
+
+			if (ticked) {
+				const currentDateIdx = HabitEntryUtils.indexOf(entries, dateParsed)
+				const currentEntry = entries[currentDateIdx]
+
+				habitCount = currentEntry.type === EntryType.Counter
+					? currentEntry.counter
+					: 1
+			}
+
 			if (!ticked && maxGap > 0) {
 				// Gap only between consecutive entries whose gap ≤ maxGap
 				const parsed = parseISO(date)
 				for (let i = 0; i < entries.length - 1; i++) {
 					const prev = entries[i].date
 					const next = entries[i + 1].date
-					if (
+					if (!gap &&
 						differenceInCalendarDays(parsed, prev) > 0 &&
 						differenceInCalendarDays(next, parsed) > 0
 					) {
 						if (differenceInCalendarDays(next, prev) - 1 <= maxGap) {
 							gap = true
 						}
-						break
 					}
+
 				}
 			}
 			return {
@@ -79,6 +92,7 @@
 				streakEnd: false,
 				streakCount: 0,
 				classes: '',
+				habitCount,
 			}
 		})
 
@@ -381,7 +395,10 @@
 			>
 				<span
 					class="habit-tick__inner"
-				>{#if showStreaks && day.streakEnd && day.streakCount > 1}{day.streakCount}{/if}</span>
+				>
+				{#if day.habitCount < 2 && showStreaks && day.streakEnd && day.streakCount > 1}{day.streakCount}{/if}
+				{#if day.habitCount > 1}{day.habitCount}{/if}
+			</span>
 			</div>
 		{/each}
 	{/if}
