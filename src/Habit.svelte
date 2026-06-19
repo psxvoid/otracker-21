@@ -23,7 +23,6 @@
 	let customStyles = ''
 	let savingChanges = false // this helps the file change listner know if we made a change. if not, it reloads the data for the habit
 	let logger = new DebugLog(() => globalSettings, 'Habit')
-	let isShiftPressed = false
 
 	// Reactive color resolution - updates whenever frontmatter, userSettings, or globalSettings change
 	$: {
@@ -268,7 +267,7 @@
 		logger.debugLog(entries)
 	}
 
-	const toggleHabit = function (date: string) {
+	const toggleHabit = function (e: MouseEvent & KeyboardEvent, date: string) {
 		const file = this.app.vault.getAbstractFileByPath(path)
 		if (!file || !(file instanceof TFile)) {
 			new Notice(`${pluginName}: file missing while trying to toggle habit`)
@@ -283,7 +282,7 @@
 
 		if (existingEntry != null) {
 			
-			if (isShiftPressed) {
+			if (e.shiftKey) {
 				logger.debugLog('Click+shift...')
 				newEntries = newEntries.filter(e => !HabitEntryUtils.equal(e, existingEntry))
 			} else {
@@ -354,19 +353,6 @@
 		hideTooltip()
 	})
 
-	const onKeyUpDown = (e: KeyboardEvent) => {
-		isShiftPressed = e.shiftKey
-	}
-
-	const registerKeyListener = (e: MouseEvent) => {
-		document.addEventListener('keydown', onKeyUpDown)
-		document.addEventListener('keyup', onKeyUpDown)
-	}
-
-	const unregisterKeyListener = (e: MouseEvent) => {
-		document.removeEventListener('keydown', onKeyUpDown)
-		document.removeEventListener('keyup', onKeyUpDown)
-	}
 
 </script>
 
@@ -389,9 +375,9 @@
 			<div
 				class={day.classes}
 				ticked={day.ticked}
-				on:mouseenter={(e) => { showTooltip(e, day); registerKeyListener(e); } }
-				on:mouseleave={(e) => { hideTooltip(); unregisterKeyListener(e); } }
-				on:click={() => toggleHabit(day.date)}
+				on:mouseenter={(e) => { showTooltip(e, day); } }
+				on:mouseleave={hideTooltip}
+				on:click={(e) => toggleHabit(e, day.date)}
 			>
 				<span
 					class="habit-tick__inner"
