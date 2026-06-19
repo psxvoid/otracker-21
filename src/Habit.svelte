@@ -319,13 +319,29 @@
 	let tooltipEl = null
 
 	function showTooltip(e, day) {
-		if (!day.deadline) return
+		const hasDeadline = day.deadline
+		const hasStreakAndCountConflict = showStreaks && day.streakEnd && (day.streakCount > 1 || day.habitCount > 1)
+
+		if (!hasDeadline && !hasStreakAndCountConflict) {
+			return
+		}
+
 		hideTooltip()
 		const rect = e.currentTarget.getBoundingClientRect()
+		const createTooltipText = (): string => {
+			const newLineChar = '\n'
+			const deadlineText = hasDeadline ? 'Last day to keep your streak alive!' : ''
+			const streakText = hasStreakAndCountConflict ? `Streak: ${day.streakCount}${newLineChar}Ticked: ${day.habitCount}` : ''
+
+			return [
+				deadlineText,
+				streakText
+			].filter(x => x != null && x.length > 0).join(newLineChar)
+		}
 
 		tooltipEl = document.body.createDiv({
 			cls: 'ht21-tooltip',
-			text: 'Last day to keep your streak alive!',
+			text: createTooltipText(),
 		})
 		tooltipEl.style.left = `${rect.left + rect.width / 2}px`
 		tooltipEl.style.top = `${rect.top - 4}px`
