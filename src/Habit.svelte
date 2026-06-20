@@ -9,6 +9,7 @@
 	import { EntryType, HabitEntry, HabitEntryUtils, HabitEntryWithCounter, parseEntry, serializeEntry } from './HabitEntry'
 	import { DateUtils } from './DateUtils'
 	import { ClickMode, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings } from './settings'
+	import { longclick } from './utils/svelte/longclick'
 
 	export let app
 	export let name
@@ -269,7 +270,11 @@
 		mergedSettings = mergeSettings(globalSettings, userSettings)
 	}
 
-	function getClickAction(params: { isShiftPressed: boolean }): ClickAction {
+	function getClickAction(params: { isShiftPressed: boolean, isLongClick: boolean }): ClickAction {
+		if (params.isLongClick) {
+			return ClickAction.Toggle
+		}
+
 		if (mergedSettings.clickMode === ClickMode.ClickIncreasesTickCount) {
 			if (!params.isShiftPressed) {
 				return ClickAction.TickIncrement
@@ -287,7 +292,7 @@
 		}
 	}
 
-	const toggleHabit = function (e: MouseEvent & KeyboardEvent, date: string) {
+	const toggleHabit = function (e: MouseEvent & KeyboardEvent, date: string, isLongClick: boolean) {
 		const file = this.app.vault.getAbstractFileByPath(path)
 		if (!file || !(file instanceof TFile)) {
 			new Notice(`${pluginName}: file missing while trying to toggle habit`)
@@ -300,7 +305,7 @@
 
 		let newEntries: HabitEntry[] = [...entries]
 
-		const clickAction = getClickAction({ isShiftPressed: e.shiftKey })
+		const clickAction = getClickAction({ isShiftPressed: e.shiftKey, isLongClick })
 
 		if (existingEntry != null) {
 			if (clickAction === ClickAction.Toggle) {
@@ -414,7 +419,9 @@
 				ticked={day.ticked}
 				on:mouseenter={(e) => { showTooltip(e, day); } }
 				on:mouseleave={hideTooltip}
-				on:click={(e) => toggleHabit(e, day.date)}
+				on:click={(e) => toggleHabit(e, day.date, false)}
+				use:longclick={1000}
+				on:longclick={ (e) => toggleHabit(e, day.date, true) }
 			>
 				<span
 					class="habit-tick__inner"
