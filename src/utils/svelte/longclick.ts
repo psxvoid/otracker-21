@@ -35,6 +35,7 @@ export function longclick(node: HTMLElement, duration = 500) {
 			node.removeEventListener('mouseup', onClickUp)
 			node.removeEventListener('touchstart', onClickDown)
 			node.removeEventListener('touchend', onClickUp)
+			node.removeEventListener('click', onShortClick, true)
 		}
 	}
 }
