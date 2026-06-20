@@ -6,6 +6,7 @@ export function longclick(node: HTMLElement, duration = 500) {
     timer = setTimeout(() => {
 			isLongClickActivated = true
       node.dispatchEvent(new CustomEvent('longclick'))
+			window?.navigator?.vibrate(50)
     }, duration)
   }
 
