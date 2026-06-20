@@ -26,7 +26,6 @@
 	let savingChanges = false // this helps the file change listner know if we made a change. if not, it reloads the data for the habit
 	let logger = new DebugLog(() => globalSettings, 'Habit')
 	let mergedSettings: HabitTrackerMergedSettings
-	let isLongClick = false
 
 	const enum ClickAction {
 		TickIncrement,
@@ -420,9 +419,9 @@
 				ticked={day.ticked}
 				on:mouseenter={(e) => { showTooltip(e, day); } }
 				on:mouseleave={hideTooltip}
-				on:click={(e) => { if (isLongClick) { isLongClick = false; return; } else { toggleHabit(e, day.date, false) }}}
+				on:click={(e) => toggleHabit(e, day.date, false)}
 				use:longclick={1000}
-				on:longclick={ (e) => { isLongClick = true; toggleHabit(e, day.date, true) } }
+				on:longclick={ (e) => toggleHabit(e, day.date, true) }
 			>
 				<span
 					class="habit-tick__inner"

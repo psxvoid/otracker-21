@@ -1,28 +1,32 @@
-export function longclick(node, duration = 500) {
+export function longclick(node: HTMLElement, duration = 500) {
   let timer
 	let isLongClickActivated: boolean
 
-  const onClickDown = (e: MouseEvent) => {
+  const onClickDown = (e: MouseEvent | TouchEvent) => {
     timer = setTimeout(() => {
 			isLongClickActivated = true
       node.dispatchEvent(new CustomEvent('longclick'))
     }, duration)
   }
 
-  const onClickUp = (e: MouseEvent) => {
+  const onClickUp = (e: MouseEvent | TouchEvent) => {
+    clearTimeout(timer)
+  }
+
+	const onShortClick = (e: MouseEvent) => {
 		if (isLongClickActivated) {
 			isLongClickActivated = false
 			e.preventDefault()
 			e.stopImmediatePropagation()
 			e.stopPropagation()
 		}
-    clearTimeout(timer)
-  }
+	}
 
   node.addEventListener('mousedown', onClickDown)
   node.addEventListener('mouseup', onClickUp)
   node.addEventListener('touchstart', onClickDown)
   node.addEventListener('touchend', onClickUp)
+  node.addEventListener('click', onShortClick, true)
 
   return {
     destroy() {
