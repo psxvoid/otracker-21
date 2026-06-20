@@ -1,18 +1,18 @@
 export function longclick(node: HTMLElement, duration = 500) {
-  let timer
+	let timer
 	let isLongClickActivated: boolean
 
-  const onClickDown = (e: MouseEvent | TouchEvent) => {
-    timer = setTimeout(() => {
+	const onClickDown = (e: MouseEvent | TouchEvent) => {
+		timer = setTimeout(() => {
 			isLongClickActivated = true
-      node.dispatchEvent(new CustomEvent('longclick'))
+			node.dispatchEvent(new CustomEvent('longclick'))
 			window?.navigator?.vibrate(50)
-    }, duration)
-  }
+		}, duration)
+	}
 
-  const onClickUp = (e: MouseEvent | TouchEvent) => {
-    clearTimeout(timer)
-  }
+	const onClickUp = (e: MouseEvent | TouchEvent) => {
+		clearTimeout(timer)
+	}
 
 	const onShortClick = (e: MouseEvent) => {
 		if (isLongClickActivated) {
@@ -23,18 +23,18 @@ export function longclick(node: HTMLElement, duration = 500) {
 		}
 	}
 
-  node.addEventListener('mousedown', onClickDown)
-  node.addEventListener('mouseup', onClickUp)
-  node.addEventListener('touchstart', onClickDown)
-  node.addEventListener('touchend', onClickUp)
-  node.addEventListener('click', onShortClick, true)
+	node.addEventListener('mousedown', onClickDown)
+	node.addEventListener('mouseup', onClickUp)
+	node.addEventListener('touchstart', onClickDown)
+	node.addEventListener('touchend', onClickUp)
+	node.addEventListener('click', onShortClick, true)
 
-  return {
-    destroy() {
-      node.removeEventListener('mousedown', onClickDown)
-      node.removeEventListener('mouseup', onClickUp)
-      node.removeEventListener('touchstart', onClickDown)
-      node.removeEventListener('touchend', onClickUp)
-    }
-  }
+	return {
+		destroy() {
+			node.removeEventListener('mousedown', onClickDown)
+			node.removeEventListener('mouseup', onClickUp)
+			node.removeEventListener('touchstart', onClickDown)
+			node.removeEventListener('touchend', onClickUp)
+		}
+	}
 }
