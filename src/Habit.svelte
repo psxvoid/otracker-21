@@ -228,13 +228,13 @@
 	})()
 
 	const init = async function () {
-		logger.debugLog(`Loading habit ${habitName}`)
+		logger.debugLog(() => `Loading habit ${habitName}`)
 
 		const getFrontmatter = async function (path): Promise<{ entries: readonly string[] }> {
 			const file = this.app.vault.getAbstractFileByPath(path)
 
 			if (!file || !(file instanceof TFile)) {
-				logger.debugLog(`No file found for path: ${path}`)
+				logger.debugLog(() => `No file found for path: ${path}`)
 				return { entries: [] }
 			}
 
@@ -253,20 +253,20 @@
 					return fmParsed
 				})
 			} catch (error) {
-				logger.debugLog(`Error in habit ${habitName}: error.message`)
+				logger.debugLog(() => `Error in habit ${habitName}: error.message`)
 				return { entries: [] }
 			}
 		}
 
 		frontmatter = await getFrontmatter(path)
-		logger.debugLog(`Frontmatter for ${path} ↴`)
-		logger.debugLog(frontmatter)
+		logger.debugLog(() => `Frontmatter for ${path} ↴`)
+		logger.debugLog(() => frontmatter)
 		entries = frontmatter.entries.map(entryStr => parseEntry(entryStr))
 		entries = entries.sort(HabitEntryUtils.defaultComparer)
 		habitName = frontmatter.title || habitName
 
-		logger.debugLog(`Habit "${habitName}": Found ${entries.length} entries`)
-		logger.debugLog(entries)
+		logger.debugLog(() => `Habit "${habitName}": Found ${entries.length} entries`)
+		logger.debugLog(() => entries)
 		mergedSettings = mergeSettings(globalSettings, userSettings)
 	}
 
@@ -301,7 +301,7 @@
 
 		const parsedEntry: HabitEntry = parseEntry(date)
 		const existingEntry = entries.find(x => HabitEntryUtils.equal(x, parsedEntry))
-		logger.debugLog(`Existing entry was ${existingEntry == null ? 'not' : ''} found...`)
+		logger.debugLog(() => `Existing entry was ${existingEntry == null ? 'not' : ''} found...`)
 
 		let newEntries: HabitEntry[] = [...entries]
 
@@ -309,27 +309,27 @@
 
 		if (existingEntry != null) {
 			if (clickAction === ClickAction.Toggle) {
-				logger.debugLog('Untick...')
+				logger.debugLog(() => 'Untick...')
 				newEntries = newEntries.filter(e => !HabitEntryUtils.equal(e, existingEntry))
 			} else {
-				logger.debugLog('Tick...')
+				logger.debugLog(() => 'Tick...')
 				if (existingEntry.type === EntryType.Counter) {
-			    logger.debugLog(`Incrementing counter (was: ${existingEntry.counter})`)
+			    logger.debugLog(() => `Incrementing counter (was: ${existingEntry.counter})`)
 					existingEntry.counter = existingEntry.counter + 1
 				} else {
-			    logger.debugLog(`Promoting an entry to the counter.`);
+			    logger.debugLog(() => `Promoting an entry to the counter.`);
 					(existingEntry as unknown as any).type = EntryType.Counter;
 					(existingEntry as unknown as HabitEntryWithCounter).counter = 2
 				}
 			}
 		} else {
-			logger.debugLog(`Adding a new entry: ${JSON.stringify(parsedEntry)}`)
+			logger.debugLog(() => `Adding a new entry: ${JSON.stringify(parsedEntry)}`)
 			newEntries.push(parsedEntry)
 		}
 
 		entries = newEntries.sort(HabitEntryUtils.defaultComparer)
-		logger.debugLog(`Updated entries`)
-		logger.debugLog(entries)
+		logger.debugLog(() => `Updated entries`)
+		logger.debugLog(() => entries)
 
 		savingChanges = true
 
@@ -383,7 +383,7 @@
 	const modifyRef = app.vault.on('modify', (file) => {
 		if (file.path === path) {
 			if (!savingChanges) {
-				console.log('oh shit, i was modified')
+				logger.debugLog(() => 'oh shit, i was modified')
 				init()
 			}
 			savingChanges = false
