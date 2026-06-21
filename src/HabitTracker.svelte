@@ -172,7 +172,7 @@
 			await validateEssentials(state.settings)
 		} catch (error) {
 			state.ui.fatalError = `Could not start: ${error.message}`
-			console.error(`[${pluginName}] ${state.ui.fatalError}`)
+			logger.debugError(() => `${state.ui.fatalError}`)
 			return
 		}
 		logger.debugLog(() => state.settings)

@@ -30,7 +30,13 @@ export class DebugLog {
 		console.log(messageOrObject);
 	}
 
-	debugError(message: string, error?: unknown) {
+	debugError(createMessage: () => string, error?: unknown) {
+		if (typeof createMessage !== 'function') {
+			return
+		}
+
+		const message = createMessage()
+
 		console.error(`${this.prefix} error: ${message}`)
 
 		if (error != null) {

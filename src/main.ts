@@ -148,7 +148,7 @@ export default class HabitTracker21 extends Plugin {
 						globalSettings: this.settings
 					}
 				})
-				this.logger.debugError(`Received invalid settings`, error as Error)
+				this.logger.debugError(() => `Received invalid settings`, error as Error)
 			}
 		})
 
@@ -330,7 +330,7 @@ export default class HabitTracker21 extends Plugin {
 				localStorage.removeItem('habit-tracker-update-available')
 			}
 		} catch (error) {
-			this.logger.debugError('Update check failed')
+			this.logger.debugError(() => 'Update check failed')
 		}
 	}
 
