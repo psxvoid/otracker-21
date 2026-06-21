@@ -10,11 +10,17 @@ export class DebugLog {
 			: `${DebugLog.defaultPrefix} [${prefix}]`
 	}
 
-	debugLog(messageOrObject: string | object) {
+	debugLog(createMessage: () => string | object) {
+		if (typeof createMessage !== 'function') {
+			return 
+		}
+
 		const settings = this.getSettings()
 		if (settings == null || !settings.debug) {
 			return	
 		}
+
+		const messageOrObject = createMessage()
 
 		if (typeof messageOrObject === 'string') {
 			console.log(`${this.prefix}`, messageOrObject);
@@ -24,7 +30,13 @@ export class DebugLog {
 		console.log(messageOrObject);
 	}
 
-	debugError(message: string, error?: unknown) {
+	debugError(createMessage: () => string, error?: unknown) {
+		if (typeof createMessage !== 'function') {
+			return
+		}
+
+		const message = createMessage()
+
 		console.error(`${this.prefix} error: ${message}`)
 
 		if (error != null) {

@@ -41,7 +41,7 @@ const getCurrentDailyNoteDate = (app: App, sourcePath: string, logger: DebugLog)
 		}
 	}
 
-	logger.debugLog(`Unable to get daily note date from daily note plugin. Trying with a specific format.`)
+	logger.debugLog(() => `Unable to get daily note date from daily note plugin. Trying with a specific format.`)
 	let dailyNoteDateFormatDebug: string | undefined
 
 	try {
@@ -87,7 +87,7 @@ export default class HabitTracker21 extends Plugin {
 			// if (el.parentElement) el.parentElement.appendChild(trackingPixel)
 			// TODO make this dynamic and add it to HabitTracker.svelte
 
-			this.logger.debugLog('Loading')
+			this.logger.debugLog(() => 'Loading')
 
 			const parseDailyNoteDate = (mergedSettings: HabitTrackerMergedSettings): { parsed: false } | { parsed: true, date: Date } => {
 				if (!mergedSettings.useDailyNoteDate) {
@@ -100,10 +100,10 @@ export default class HabitTracker21 extends Plugin {
 					return { parsed: true, date: dateParseResult.date }
 				}
 
-				this.logger.debugLog(dateParseResult.errorMessage)
+				this.logger.debugLog(() => dateParseResult.errorMessage)
 
 				if (dateParseResult.exception != null) {
-					this.logger.debugLog(`Parse exception ${dateParseResult.exception}`)
+					this.logger.debugLog(() => `Parse exception ${dateParseResult.exception}`)
 				}
 
 				return { parsed: false }
@@ -120,9 +120,9 @@ export default class HabitTracker21 extends Plugin {
 				const dailyNoteDateParseResult = parseDailyNoteDate(mergedSettings)
 				const today = dailyNoteDateParseResult.parsed ? dailyNoteDateParseResult.date : new Date();
 
-				this.logger.debugLog(`Global settings: ${JSON.stringify(this.settings)}`);
-				this.logger.debugLog(`Tracker settings: ${JSON.stringify(userSettings)}`);
-				this.logger.debugLog(`Today is ${format(today, 'yyyy-MM-dd')}`);
+				this.logger.debugLog(() => `Global settings: ${JSON.stringify(this.settings)}`);
+				this.logger.debugLog(() => `Tracker settings: ${JSON.stringify(userSettings)}`);
+				this.logger.debugLog(() => `Today is ${format(today, 'yyyy-MM-dd')}`);
 				new HabitTracker({
 						target: el,
 						props: {
@@ -148,7 +148,7 @@ export default class HabitTracker21 extends Plugin {
 						globalSettings: this.settings
 					}
 				})
-				this.logger.debugError(`Received invalid settings`, error as Error)
+				this.logger.debugError(() => `Received invalid settings`, error as Error)
 			}
 		})
 
@@ -169,7 +169,7 @@ export default class HabitTracker21 extends Plugin {
 	}
 
 	async saveSettings() {
-		this.logger.debugLog('Saving settings...');
+		this.logger.debugLog(() => 'Saving settings...');
 		await this.saveData(this.settings);
 		
 		// Refresh all habit tracker instances when settings change
@@ -178,12 +178,12 @@ export default class HabitTracker21 extends Plugin {
 
 	refreshAllHabitTrackers() {
 		// Dispatch a single event at the document level that all components can listen to
-		this.logger.debugLog('Dispatching refresh event with settings...');
+		this.logger.debugLog(() => 'Dispatching refresh event with settings...');
 		const refreshEvent = new CustomEvent('habit-tracker-refresh', {
 			detail: { settings: this.settings }
 		});
 		document.dispatchEvent(refreshEvent);
-		this.logger.debugLog(' Refresh event dispatched...');
+		this.logger.debugLog(() => ' Refresh event dispatched...');
 	}
 
 	addHoverActionBars() {
@@ -317,20 +317,20 @@ export default class HabitTracker21 extends Plugin {
 			// Store check timestamp
 			localStorage.setItem('habit-tracker-last-update-check', Date.now().toString())
 
-			this.logger.debugLog('Update check - latestVersion:')
-			this.logger.debugLog('Update check - currentVersion:')
+			this.logger.debugLog(() => 'Update check - latestVersion:')
+			this.logger.debugLog(() => 'Update check - currentVersion:')
 			const isNewer = this.isNewerVersion(latestVersion, currentVersion)
-			this.logger.debugLog('Update check - isNewerVersion result:')
+			this.logger.debugLog(() => 'Update check - isNewerVersion result:')
 
 			if (isNewer) {
 				localStorage.setItem('habit-tracker-update-available', latestVersion)
-				this.logger.debugLog(`Update check - Stored update available: ${latestVersion}`)
+				this.logger.debugLog(() => `Update check - Stored update available: ${latestVersion}`)
 			} else {
-				this.logger.debugLog('Update check - No update needed')
+				this.logger.debugLog(() => 'Update check - No update needed')
 				localStorage.removeItem('habit-tracker-update-available')
 			}
 		} catch (error) {
-			this.logger.debugError('Update check failed')
+			this.logger.debugError(() => 'Update check failed')
 		}
 	}
 

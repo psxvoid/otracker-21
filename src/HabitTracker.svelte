@@ -20,6 +20,7 @@
 		parseISO,
 		subDays,
 	} from 'date-fns'
+	import { DebugLog } from './debugHelpers'
 
 	// TypeScript interfaces for better state management
 	interface HabitTrackerSettings {
@@ -78,6 +79,8 @@
 		showStreaks: boolean
 		gapStyle: string
 	}>
+
+	const logger = new DebugLog(() => state.settings, "HabitTracker")
 
 	// Default settings - use global settings as defaults
 	const createDefaultSettings = (): HabitTrackerSettings => ({
@@ -169,74 +172,50 @@
 			await validateEssentials(state.settings)
 		} catch (error) {
 			state.ui.fatalError = `Could not start: ${error.message}`
-			console.error(`[${pluginName}] ${state.ui.fatalError}`)
+			logger.debugError(() => `${state.ui.fatalError}`)
 			return
 		}
-		debugLog(state.settings, state.settings.debug)
+		logger.debugLog(() => state.settings)
 
 		state.computed.dates = eachDayOfInterval({
 			start: parseISO(state.settings.firstDisplayedDate),
 			end: parseISO(state.settings.lastDisplayedDate),
 		}).map((date) => getDateAsString(date))
 
-		debugLog(`Will show habits for the following dates:`, state.settings.debug)
-		debugLog(state.computed.dates, state.settings.debug)
+		logger.debugLog(() => `Will show habits for the following dates:`)
+		logger.debugLog(() => state.computed.dates)
 
 		// Load habits
 		state.computed.habits = getHabits(state.settings.path)
 		if (state.computed.habits && state.computed.habits.length) {
 			const count = state.computed.habits.length
-			debugLog(
-				`Found ${count} ${pluralize(count, 'habit')} at "${state.settings.path}" ↴`,
-				state.settings.debug,
-				undefined,
-				pluginName,
-			)
-			debugLog(
-				state.computed.habits.map((habit) => habit.path),
-				state.settings.debug,
-				undefined,
-				pluginName,
-			)
+			logger.debugLog(() => 
+				`Found ${count} ${pluralize(count, 'habit')} at "${state.settings.path}" ↴`)
+			logger.debugLog(() => state.computed.habits.map((habit) => habit.path))
 		} else {
 			// TODO add a button so they can create a habit
 			state.ui.fatalError = `No habits found at "${state.settings.path}"`
-			debugLog(
-				`No habits found at ${state.settings.path}`,
-				state.settings.debug,
-				undefined,
-				pluginName,
-			)
+			logger.debugLog(() => `No habits found at ${state.settings.path}`)
 			return
 		}
 
-		debugLog(`Initialization completed successfully`, state.settings.debug)
+		logger.debugLog(() => `Initialization completed successfully`)
 	}
 
 	const scrollToEnd = function () {
 		if (!state.ui.rootElement) {
-			debugLog(
-				`scrollToEnd: rootElement is null, cannot scroll`,
-				state.settings.debug,
-				undefined,
-				pluginName,
-			)
+			logger.debugLog(() => `scrollToEnd: rootElement is null, cannot scroll`)
 			return
 		}
 
 		const parent = state.ui.rootElement.parentElement
 		if (!parent) {
-			debugLog(
-				`scrollToEnd: parentElement is null, cannot scroll`,
-				state.settings.debug,
-				undefined,
-				pluginName,
-			)
+			logger.debugLog(() => `scrollToEnd: parentElement is null, cannot scroll`)
 			return
 		}
 
 		parent.scrollLeft = 99999999
-		debugLog(`scrollToEnd completed`, state.settings.debug)
+		logger.debugLog(() => `scrollToEnd completed`)
 	}
 
 	const validateEssentials = async function (
@@ -257,7 +236,7 @@
 			}
 		}
 
-		debugLog(`Final settings are valid ↴`, state.settings.debug)
+		logger.debugLog(() => `Final settings are valid ↴`)
 		return true
 	}
 
@@ -270,7 +249,7 @@
 	}
 
 	const getHabits = function (path: string): HabitData[] {
-		debugLog(`Loading habits`, state.settings.debug)
+		logger.debugLog(() => `Loading habits`)
 		state.ui.habitSource = app.vault.getAbstractFileByPath(path)
 
 		if (state.ui.habitSource && state.ui.habitSource instanceof TFolder) {
@@ -278,11 +257,8 @@
 			const allItems = state.ui.habitSource.children
 			const filesOnly = allItems.filter((item) => item instanceof TFile)
 			const count = filesOnly.length
-			debugLog(
+			logger.debugLog(() => 
 				`"${path}" points to a folder with ${count} ${pluralize(count, 'file')} inside (ignoring subfolders)`,
-				state.settings.debug,
-				undefined,
-				pluginName,
 			)
 			// Sort files alphabetically by name
 			const sortedFiles = filesOnly.sort((a, b) =>
@@ -292,22 +268,17 @@
 		}
 
 		if (state.ui.habitSource && state.ui.habitSource instanceof TFile) {
-			debugLog(`${path} points to a file`, state.settings.debug)
+			logger.debugLog(() => `${path} points to a file`)
 			return [state.ui.habitSource as HabitData]
 		}
 
 		state.ui.habitSource = app.vault.getAbstractFileByPath(`${path}.md`)
 		if (state.ui.habitSource) {
-			debugLog(
-				`Adjusted ${path} to ${path}.md and found a file`,
-				state.settings.debug,
-				undefined,
-				pluginName,
-			)
+			logger.debugLog(() => `Adjusted ${path} to ${path}.md and found a file`)
 			return [state.ui.habitSource as HabitData]
 		}
 
-		debugLog(`${path} is not found`, state.settings.debug)
+		logger.debugLog(() => `${path} is not found`)
 		return []
 	}
 
@@ -329,29 +300,23 @@
 		filePath.startsWith(state.settings.path + '/')
 
 	onMount(() => {
-		debugLog('Component mounted, setting up refresh listener')
+		logger.debugLog(() => 'Component mounted, setting up refresh listener')
 		refreshEventListener = (event: CustomEvent) => {
-			console.log(
-				'[HabitTracker] Refresh event received:',
-				event.detail.settings,
-			)
+			logger.debugLog(() => 'Refresh event received:')
 			// Update global settings and reset state to use new defaults
 			globalSettings = event.detail.settings
 
 			// Reset state with new global settings as defaults
 			state.settings = createDefaultSettings()
-			console.log(
-				'[HabitTracker] Reset state with new defaults:',
-				state.settings,
-			)
+			logger.debugLog(() => 'Reset state with new defaults:')
 
-			console.log('[HabitTracker] Calling init with updated settings')
+			logger.debugLog(() => 'Calling init with updated settings')
 			init(userSettings)
 		}
 
 		// Listen for refresh events at the document level
 		document.addEventListener('habit-tracker-refresh', refreshEventListener)
-		debugLog('Refresh event listener added to document')
+		logger.debugLog(() => 'Refresh event listener added to document')
 
 		// Schedule reload at midnight so dates stay current
 		const scheduleMidnightReload = () => {
@@ -359,7 +324,7 @@
 			const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
 			const msUntilMidnight = midnight.getTime() - now.getTime()
 			midnightTimer = setTimeout(() => {
-				debugLog('Midnight reload triggered', state.settings.debug)
+				logger.debugLog(() => 'Midnight reload triggered')
 				state.settings = createDefaultSettings()
 				init(userSettings)
 				scheduleMidnightReload()
