@@ -20,7 +20,7 @@
 		parseISO,
 		subDays,
 	} from 'date-fns'
-	import { DebugLog } from './debugHelpers'
+	import { DebugLog } from './utils/debugHelpers'
 
 	// TypeScript interfaces for better state management
 	interface HabitTrackerSettings {

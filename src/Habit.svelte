@@ -4,7 +4,7 @@
 	import {onDestroy} from 'svelte'
 	import {parseYaml, TFile} from 'obsidian'
 	import {getDayOfTheWeek} from './utils'
-	import { DebugLog } from './debugHelpers'
+	import { DebugLog } from './utils/debugHelpers'
 	import { differenceInCalendarDays, parseISO, format } from 'date-fns'
 	import { EntryType, HabitEntry, HabitEntryUtils, HabitEntryWithCounter, parseEntry, serializeEntry } from './HabitEntry'
 	import { DateUtils } from './utils/DateUtils'
