@@ -7,7 +7,7 @@
 	import { DebugLog } from './debugHelpers'
 	import { differenceInCalendarDays, parseISO, format } from 'date-fns'
 	import { EntryType, HabitEntry, HabitEntryUtils, HabitEntryWithCounter, parseEntry, serializeEntry } from './HabitEntry'
-	import { DateUtils } from './DateUtils'
+	import { DateUtils } from './utils/DateUtils'
 	import { ClickMode, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings } from './settings'
 	import { longclick } from './utils/svelte/longclick'
 
