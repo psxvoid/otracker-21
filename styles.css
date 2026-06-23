@@ -156,7 +156,7 @@ div:has(.block-language-habittracker),
 .block-language-habittracker {
 	border: var(--habit-outer-border);
 	border-radius: var(--radius-s);
-	overflow-x: scroll;
+	overflow-x: visible !important; /* Main fix 5: Changed from "scroll" to hand physics over to the grid. The name cells stay fixed (sticky) */
 	width: 100%;
 	max-width: 100%;
 	scrollbar-width: thin;
@@ -184,7 +184,10 @@ body:not(.is-readable-line-width) .block-language-habittracker:has(.habit-tracke
         repeat(var(--date-columns), var(--habit-cell-width)) !important;
 		
 	width: 100%;
-	min-width: max-content; /* Main fix 2: Makes habit name cells truly sticky. Now when window is shrinked, the dates do not slide behind the name cells */
+	/* Main fix 6.1: we make the habits grid scrollable when shrinked when RLL off MLL off */
+	min-width: 0 !important; 		/* changed from max-content to unlock layout shrinking */
+	max-width: 100% !important;     /* Force containment within view boundaries */
+	overflow-x: auto !important;    /* Make the grid own the scrollbar context */
 	background-color: var(--habit-bg);
 }
 
@@ -199,7 +202,10 @@ body:not(.is-readable-line-width) .block-language-habittracker:has(.habit-tracke
         repeat(var(--date-columns), var(--habit-cell-width)) !important;
 
 	width: 100%;
-	min-width: max-content; /* Not sure if necessary. No harm, but potential good */
+	/* Main fix 6.2: we make the habits grid scrollable when shrinked when RLL on MLL on */
+	min-width: 0 !important; 		/* changed from max-content to unlock layout shrinking */
+	max-width: 100% !important;     /* Force containment within view boundaries */
+	overflow-x: auto !important;    /* Make the grid own the scrollbar context */
 	max-width: var(--file-line-width);
 }
 
@@ -425,3 +431,26 @@ body:not(.is-readable-line-width) .block-language-habittracker:has(.habit-tracke
 .habit-tracker__header .habit-tracker__cell--today {
 	color: var(--habit-name-text-color);
 }
+
+/* FIX: Handle nested overflow when both Readable Line Length (RLL) 
+   and Match Line Length (MLL) are toggled on.
+*/
+
+/* 1. Turn off outer scroll behaviors on the markdown wrapper */
+.cm-preview-code-block.markdown-rendered:has(.block-language-habittracker) {
+    overflow-x: visible !important;
+}
+
+.block-language-habittracker {
+    overflow-x: visible !important; /* Prevent the outer container from moving */
+}
+
+/* 2. Force the grid itself to contain the horizontal scrollbar context */
+.habit-tracker,
+.is-readable-line-width .habit-tracker--match-line-length {
+    min-width: 0 !important;         /* Breaks the rigid brick behavior */
+    max-width: 100% !important;      /* Forces the grid to stick to the visible layout width */
+    overflow-x: auto !important;     /* Empowers the grid to own the scrolling physics internally */
+    scrollbar-width: thin;
+}
+
