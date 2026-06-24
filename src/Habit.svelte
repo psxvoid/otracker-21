@@ -399,16 +399,16 @@
 </script>
 
 <!-- <div bind:this={rootElement}> -->
-<div
-	class="habit-tracker__row"
-	style={customStyles}
->
-	<div class="habit-tracker__cell--name habit-tracker__cell">
+	<div class="habit-tracker__cell--name habit-tracker__cell"
+		draggable="true"
+		role="listitem"
+		on:dragstart={(e) => { return false; } }
+		>
 		<a
 			href={path}
 			aria-label={path}
-			class="internal-link">{habitName}</a
-		>
+			class="internal-link">{habitName}
+		</a>
 	</div>
 	{#if renderedDates.length}
 		{#each renderedDates as day}
@@ -432,4 +432,3 @@
 			</div>
 		{/each}
 	{/if}
-</div>

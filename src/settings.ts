@@ -15,6 +15,7 @@ export interface HabitTrackerSettings {
 	updateCheckEnabled: boolean;
 	useDailyNoteDate: boolean;
 	clickMode: ClickMode;
+	habitOrderField: string;
 }
 
 export interface HabitTrackerUserSettings extends Omit<HabitTrackerSettings, 'defaultColor' | 'clickMode' | 'updateCheckEnabled'> {
@@ -37,6 +38,7 @@ export const DEFAULT_SETTINGS: HabitTrackerSettings = {
 	updateCheckEnabled: false,
 	useDailyNoteDate: true,
 	clickMode: ClickMode.ClickIncreasesTickCount,
+	habitOrderField: 'habitOrder',
 }
 
 export function mergeSettings(globalSettings: HabitTrackerSettings, userSettings: Partial<HabitTrackerUserSettings>): HabitTrackerMergedSettings {

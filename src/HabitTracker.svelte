@@ -1,26 +1,31 @@
 <script lang="ts">
-	import {debugLog, pluralize, renderPrettyDate} from './utils'
+	import {pluralize, renderPrettyDate} from './utils'
 	import {
 		createDailyNote,
 		getDailyNote,
 		getAllDailyNotes,
-		appHasDailyNotesPluginLoaded,
 	} from 'obsidian-daily-notes-interface'
-	import {onMount, onDestroy} from 'svelte'
+	import {onMount, onDestroy, SvelteComponent_1} from 'svelte'
 
 	import Habit from './Habit.svelte'
 
-	import {TFile, TFolder, Notice, type Plugin} from 'obsidian'
+	import {
+		TFile,
+		TFolder,
+		type Plugin,
+	} from 'obsidian'
 	import {getDateAsString, getDayOfTheWeek} from './utils.js'
 	import {
 		eachDayOfInterval,
-		format,
 		getDate,
 		isToday,
 		parseISO,
 		subDays,
 	} from 'date-fns'
-	import { DebugLog } from './utils/debugHelpers'
+	import {DebugLog} from './utils/debugHelpers'
+	import { getHabitName, HabitData } from './core/HabitData'
+	import { DragAndDropController } from './DragAndDropController'
+	import { DomUtils } from './utils/DomUtils'
 
 	// TypeScript interfaces for better state management
 	interface HabitTrackerSettings {
@@ -29,17 +34,14 @@
 		lastDisplayedDate: string
 		daysToShow: number
 		debug: boolean
-		matchLineLength: boolean
+		matchLineLength: boolean,
+		habitOrderField: string
 	}
 
-	interface HabitData {
-		[x: string]: any
-		file: TFile
-	}
 
 	interface ComputedState {
 		dates: string[]
-		habits: HabitData[]
+		habits: readonly HabitData[]
 	}
 
 	interface UIState {
@@ -48,10 +50,23 @@
 		habitSource: TFile | TFolder | null
 	}
 
+	interface DragAndDropState {
+		isDragStarted: boolean
+		dragDoubleTopOffset: number
+	}
+
 	interface HabitTrackerState {
 		settings: HabitTrackerSettings
 		computed: ComputedState
 		ui: UIState
+		dragAndDrop: DragAndDropState
+	}
+
+	const updateDragAndDropState = (newState: Partial<DragAndDropState>) => {
+		state.dragAndDrop = {
+			...state.dragAndDrop,
+			...newState
+		}
 	}
 
 	export let app: Plugin['app']
@@ -64,9 +79,10 @@
 		debug: boolean
 		matchLineLength: boolean
 		defaultColor: string
-		showStreaks: boolean	
+		showStreaks: boolean
 		openDailyNoteOnClick: boolean
 		gapStyle: string
+		habitOrderField: string
 	}
 	export let userSettings: Partial<{
 		path: string
@@ -78,9 +94,28 @@
 		color: string
 		showStreaks: boolean
 		gapStyle: string
+		habitOrderField: string
 	}>
 
-	const logger = new DebugLog(() => state.settings, "HabitTracker")
+	let dragController: DragAndDropController = {} as DragAndDropController
+	const destroyDragController = () => {
+		dragController = {} as DragAndDropController
+		state.dragAndDrop = {
+			isDragStarted: false,
+			dragDoubleTopOffset: -1,
+		}
+	}
+	const isDragStarted = () => dragController instanceof DragAndDropController
+
+	const logger = new DebugLog(() => state.settings, 'HabitTracker')
+
+	const parseHabitOrder = (habitOrder: undefined | number | null, min: number, max: number): number | undefined => {
+		if (habitOrder == null || typeof habitOrder !== 'number' || !Number.isInteger(habitOrder) || habitOrder < min || habitOrder > max) {
+			return
+		}
+
+		return habitOrder
+	}
 
 	// Default settings - use global settings as defaults
 	const createDefaultSettings = (): HabitTrackerSettings => ({
@@ -106,6 +141,10 @@
 			rootElement: null,
 			habitSource: null,
 		},
+		dragAndDrop: {
+			isDragStarted: false,
+			dragDoubleTopOffset: -1,
+		}
 	}
 
 	const init = async function (userSettings: Partial<HabitTrackerSettings>) {
@@ -116,15 +155,20 @@
 
 		// Smart date/daysToShow logic: explicit user settings take priority
 		const hasExplicitFirstDate = userSettings.firstDisplayedDate !== undefined
-		const hasExplicitLastDate = userSettings.lastDisplayedDate !== undefined || globalSettings.lastDisplayedDate != undefined
+		const hasExplicitLastDate =
+			userSettings.lastDisplayedDate !== undefined ||
+			globalSettings.lastDisplayedDate != undefined
 		const hasExplicitDaysToShow = userSettings.daysToShow !== undefined
 
 		// Start with defaults
+		// TODO: use mergeSettings
 		let resolvedSettings = {
 			path: userSettings.path || state.settings.path,
 			firstDisplayedDate: '',
 			lastDisplayedDate:
-				userSettings.lastDisplayedDate || globalSettings.lastDisplayedDate || state.settings.lastDisplayedDate,
+				userSettings.lastDisplayedDate ||
+				globalSettings.lastDisplayedDate ||
+				state.settings.lastDisplayedDate,
 			daysToShow:
 				userSettings.daysToShow !== undefined
 					? userSettings.daysToShow
@@ -137,6 +181,7 @@
 				userSettings.debug !== undefined
 					? userSettings.debug
 					: state.settings.debug,
+			habitOrderField: userSettings?.habitOrderField ?? globalSettings?.habitOrderField
 		}
 
 		// Apply smart firstDisplayedDate logic
@@ -189,8 +234,10 @@
 		state.computed.habits = getHabits(state.settings.path)
 		if (state.computed.habits && state.computed.habits.length) {
 			const count = state.computed.habits.length
-			logger.debugLog(() => 
-				`Found ${count} ${pluralize(count, 'habit')} at "${state.settings.path}" ↴`)
+			logger.debugLog(
+				() =>
+					`Found ${count} ${pluralize(count, 'habit')} at "${state.settings.path}" ↴`,
+			)
 			logger.debugLog(() => state.computed.habits.map((habit) => habit.path))
 		} else {
 			// TODO add a button so they can create a habit
@@ -257,14 +304,65 @@
 			const allItems = state.ui.habitSource.children
 			const filesOnly = allItems.filter((item) => item instanceof TFile)
 			const count = filesOnly.length
-			logger.debugLog(() => 
-				`"${path}" points to a folder with ${count} ${pluralize(count, 'file')} inside (ignoring subfolders)`,
+			logger.debugLog(
+				() =>
+					`"${path}" points to a folder with ${count} ${pluralize(count, 'file')} inside (ignoring subfolders)`,
 			)
+			let hasCustomOrder = false
+			const firstPassOrderMap = new Map<number, HabitData>()
+			const secondPassOrderMap = new Map<number, HabitData>()
+
 			// Sort files alphabetically by name
-			const sortedFiles = filesOnly.sort((a, b) =>
-				a.basename.localeCompare(b.basename),
-			)
-			return sortedFiles as HabitData[]
+			const sortedFiles = filesOnly
+				.sort((a, b) => a.basename.localeCompare(b.basename))
+				.map((file, index) => {
+					const fmCache = app.metadataCache.getFileCache(file)?.frontmatter ?? {}
+					const firstPassOrder = index + 1
+					const secondPassOrder = parseHabitOrder(fmCache[state.settings.habitOrderField], 1, filesOnly.length)
+					const title = fmCache['title']
+					
+					const habitData: HabitData = { file, title, firstPassOrder, secondPassOrder }
+
+					firstPassOrderMap.set(firstPassOrder, habitData)
+
+					if (secondPassOrder != null) {
+						hasCustomOrder = hasCustomOrder || secondPassOrder !== firstPassOrder
+						secondPassOrderMap.set(secondPassOrder, habitData)
+					}
+
+					return habitData
+				})
+
+			const result: HabitData[] = []
+			let indexIncrement = 0;
+			if (hasCustomOrder) {
+				for (let i = 1; i <= sortedFiles.length; i++) {
+					const customOrderHabit = secondPassOrderMap.get(i)
+
+					if (customOrderHabit != null) {
+						result.push(customOrderHabit)	
+						indexIncrement++
+					} else {
+						let firstPassHabit = firstPassOrderMap.get(i - indexIncrement)
+
+						while(firstPassHabit?.secondPassOrder != null) {
+							// skip already processed elements with custom order
+							indexIncrement--
+							firstPassHabit = firstPassOrderMap.get(i - indexIncrement)
+						}
+
+						if (firstPassHabit == null) {
+							throw new Error("Incorrectly computed habit order detected.")
+						}
+
+						result.push(firstPassHabit)
+					}
+				}
+
+				return result
+			}
+
+			return sortedFiles
 		}
 
 		if (state.ui.habitSource && state.ui.habitSource instanceof TFile) {
@@ -286,6 +384,29 @@
 		setTimeout(() => {
 			scrollToEnd()
 		}, 50)
+	}
+
+	$: {
+		if (isDragStarted() && dragController.dragIndex !== dragController.hoverIndex) {
+			logger.debugLog(() => `Drag: Swapping habits: ${dragController.dragIndex} and ${dragController.hoverIndex}`)
+			const habits = dragController.swapHabits()
+
+			if (habits !== state.computed.habits) {
+				state.computed.habits = habits
+			}
+		}
+	}
+
+	const hideNativeDragElement = (event: DragEvent) => {
+		const dragImage = document.createElement('div')
+		dragImage.style.width = '1px'
+		dragImage.style.height = '1px'
+		dragImage.style.opacity = '0'
+		dragImage.style.position = 'fixed'
+		dragImage.style.top = '-1000px'
+		document.body.appendChild(dragImage)
+		event.dataTransfer?.setDragImage(dragImage, 0, 0)
+		setTimeout(() => dragImage.remove(), 0)
 	}
 
 	// Listen for settings refresh events
@@ -321,7 +442,11 @@
 		// Schedule reload at midnight so dates stay current
 		const scheduleMidnightReload = () => {
 			const now = new Date()
-			const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+			const midnight = new Date(
+				now.getFullYear(),
+				now.getMonth(),
+				now.getDate() + 1,
+			)
 			const msUntilMidnight = midnight.getTime() - now.getTime()
 			midnightTimer = setTimeout(() => {
 				logger.debugLog(() => 'Midnight reload triggered')
@@ -397,17 +522,110 @@
 				</div>
 			{/each}
 		</div>
-		{#each state.computed.habits as habit}
+			{#if state.dragAndDrop.isDragStarted }
+			<div class="habit-tracker__row ht21-drag-double" style="top: {state.dragAndDrop.dragDoubleTopOffset}px;">
 			<Habit
-				name={habit.basename}
-				path={habit.path}
+				name={dragController.habit.file.basename}
+				path={dragController.habit.file.path}
 				dates={state.computed.dates}
 				debug={state.settings.debug}
 				{app}
 				{pluginName}
 				{userSettings}
 				{globalSettings}
+			></Habit></div>
+			{/if}
+		{#each state.computed.habits as habit, index (habit.file.path)}
+		<div 
+				class="habit-tracker__row {state.dragAndDrop.isDragStarted && dragController.hoverIndex === index ? 'h21-opaque' : ''}"
+				draggable="true"
+				role="row" tabindex="{index}"
+				on:dragstart={(e) => {
+					logger.debugLog(() => `Dragstart: '${getHabitName(habit)}', index: ${index}`)
+
+					hideNativeDragElement(e)
+
+					const rootElementOffsetY = state?.ui?.rootElement != null
+						? state.ui.rootElement.getBoundingClientRect().top
+						: 0
+
+					if (rootElementOffsetY === 0) {
+						logger.debugLog(() => `Root element offset is ZERO.`)
+					}
+
+					const dragContainerOffsetY = DomUtils.isTargetHTMLElement(e)
+						? e.target.getBoundingClientRect().y - e.clientY - rootElementOffsetY
+						: 0
+
+					if (dragContainerOffsetY === 0) {
+						logger.debugLog(() => `Drag container offset is ZERO.`)
+					}
+
+					updateDragAndDropState({ isDragStarted: true })
+
+					dragController = new DragAndDropController(habit, index, dragContainerOffsetY, () => state.computed.habits, () => {
+						updateDragAndDropState({ dragDoubleTopOffset: dragController.dragDoubleTopOffset })
+					})
+					dragController.updateDragDoubleTop(e.clientY)
+					
+					logger.debugLog(() => `Dragstart '${getHabitName(habit)}'', offsetY: ${dragContainerOffsetY}`)
+				}}
+				on:drag={(e) => {
+					dragController.updateDragDoubleTop(e.clientY)
+					// logger.debugLog(() => `Drag clientY: ${e.clientY}`)
+				}}
+				on:dragover={(e) => {
+					e.preventDefault()
+					dragController.updateDragDoubleTop(e.clientY)
+					dragController.hoverIndex = index
+					logger.debugLog(() => `Dragover: '${getHabitName(habit)}', hover index: ${index}`)
+				}}
+				on:dragend={(e) => {
+					logger.debugLog(() => `Dragend: '${getHabitName(habit)}', index: ${index}.`)
+
+					try {
+						const toUpdateHabits = dragController.computeHabitOrderUpdates(index, state.computed.habits)
+
+						if (toUpdateHabits.length === 0) {
+							logger.debugLog(() => `Habit '${getHabitName(habit)}' has dragged to the same place.`)
+							return
+						}
+
+						for (const { habit, newIndex } of toUpdateHabits) {
+							if (habit.secondPassOrder === newIndex) {
+								// hasn't changed, skip
+								continue
+							}
+
+							this.app.fileManager.processFrontMatter(
+								habit.file,
+								(frontmatter) => {
+									const habitOrderField = state.settings.habitOrderField
+									frontmatter[habitOrderField] = newIndex
+									habit.secondPassOrder = newIndex
+								},
+							)
+						}
+						logger.debugLog(() => `Dragend: no errors. Updates:`)
+						logger.debugLog(() => toUpdateHabits)
+					} finally {
+						destroyDragController()
+						logger.debugLog(() => `Dragend: finally.`)
+					}
+				}}
+		>
+			<Habit
+				name={habit.file.basename}
+				path={habit.file.path}
+				dates={state.computed.dates}
+				debug={state.settings.debug}
+				index={habit.secondPassOrder}
+				{app}
+				{pluginName}
+				{userSettings}
+				{globalSettings}
 			></Habit>
+		</div>
 		{/each}
 	</div>
 {/if}
