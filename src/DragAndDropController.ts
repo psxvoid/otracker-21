@@ -1,4 +1,5 @@
 import { HabitData } from "src/core/HabitData"
+import { DebugLog } from "./utils/debugHelpers";
 
 interface HabitOrderUpdate {
 	habit: HabitData,
@@ -17,7 +18,14 @@ export class DragAndDropController {
 	private dragHabitIndex: number = -1
 	private dragHoverHabitIndex: number = -1
 
-	constructor(dragHabit: HabitData, dragIndex: number, dragContainerOffsetY: number, private readonly getHabits: () => readonly HabitData[], private readonly onUpdateCallback: () => void) {
+	constructor(
+		dragHabit: HabitData,
+		dragIndex: number,
+		dragContainerOffsetY: number,
+		private readonly getHabits: () => readonly HabitData[],
+		private readonly onUpdateCallback: () => void,
+		private readonly logger: DebugLog,
+	) {
 		if (dragHabit == null) {
 			throw new Error("Provided drag habit is not initialized.")
 		}
@@ -101,6 +109,8 @@ export class DragAndDropController {
 		// items "below" this row are unaffected
 		const lowerBorderLineIndex = Math.max(indexIncremented, habitOrderBefore) - 1
 
+		this.logger.debugLog(() => `Upper: ${upperBorderLineIndex}, Lower: ${lowerBorderLineIndex}`)
+
 		const toUpdateHabits: HabitOrderUpdate[] = [{ habit, newIndex }]
 		let isPreviousVanished = false
 		for (let i = upperBorderLineIndex; i <= lowerBorderLineIndex; i++) {
@@ -114,8 +124,8 @@ export class DragAndDropController {
 			if (isPreviousVanished) {
 				isPreviousVanished = false
 				newIndex = i + 1
-			} else if (secondPassOrder == null) {
-				// make typescript compiler happy
+				this.logger.debugLog(() => `Previous element has vanished, setting a new index: ${newIndex}`)
+			} else if (secondPassOrder == null || possiblyChangedHabit === habit) {
 				continue;
 			} else if (secondPassOrder === 1 && secondPassOrder === indexIncremented) {
 				// prevents a first habit to become 0, should be moved to the second row
@@ -123,7 +133,7 @@ export class DragAndDropController {
 			} else if (secondPassOrder === totalHabits && secondPassOrder === indexIncremented) {
 				// prevents the last habit to go out of bounds
 				newIndex = totalHabits - 1
-			} else if (possiblyChangedHabit !== habit) {
+			} else {
 				if (secondPassOrder <= indexIncremented) {
 					// update all habits that are above
 					newIndex = secondPassOrder - 1

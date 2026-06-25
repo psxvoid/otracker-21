@@ -568,9 +568,12 @@
 
 					updateDragAndDropState({ isDragStarted: true })
 
-					dragController = new DragAndDropController(habit, index, dragContainerOffsetY, () => state.computed.habits, () => {
-						updateDragAndDropState({ dragDoubleTopOffset: dragController.dragDoubleTopOffset })
-					})
+					dragController = new DragAndDropController(
+						habit, index, dragContainerOffsetY,
+						() => state.computed.habits,
+						() => updateDragAndDropState({ dragDoubleTopOffset: dragController.dragDoubleTopOffset }),
+						logger.scoped('DragCtrl')
+					)
 					dragController.updateDragDoubleTop(e.clientY)
 					
 					logger.debugLog(() => `Dragstart '${getHabitName(habit)}'', offsetY: ${dragContainerOffsetY}`)
