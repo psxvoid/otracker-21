@@ -127,6 +127,7 @@
 		daysToShow: globalSettings.daysToShow,
 		debug: globalSettings.debug,
 		matchLineLength: globalSettings.matchLineLength,
+		habitOrderField: globalSettings.habitOrderField,
 	})
 
 	// Initialize unified state
