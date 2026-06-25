@@ -334,14 +334,14 @@
 				})
 
 			if (hasCustomOrder) {
-				const result: HabitData[] = []
+				const secondPassOrderHabits: HabitData[] = []
 				let indexIncrement = 0;
 
 				for (let i = 1; i <= sortedFiles.length; i++) {
 					const customOrderHabit = secondPassOrderMap.get(i)
 
 					if (customOrderHabit != null) {
-						result.push(customOrderHabit)	
+						secondPassOrderHabits.push(customOrderHabit)	
 						indexIncrement++
 					} else {
 						let firstPassHabit = firstPassOrderMap.get(i - indexIncrement)
@@ -356,11 +356,11 @@
 							throw new Error("Incorrectly computed habit order detected.")
 						}
 
-						result.push(firstPassHabit)
+						secondPassOrderHabits.push(firstPassHabit)
 					}
 				}
 
-				return result
+				return secondPassOrderHabits
 			}
 
 			return sortedFiles
