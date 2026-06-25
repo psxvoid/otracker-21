@@ -1,4 +1,5 @@
 import { DateUtils } from "./utils/DateUtils"
+import { StringUtils } from "./utils/StringUtils"
 
 export const enum EntryType {
 	Legacy,
@@ -29,7 +30,7 @@ export function parseEntry(dateEntryStr: string): HabitEntry {
 		throw new Error("The provided entry string is empty.")
 	}
 
-	if (/\s+/gm.test(dateEntryStr)) {
+	if (StringUtils.isNullOrWhiteSpace(dateEntryStr)) {
 		throw new Error("The provided entry contains whitespace but should not.")
 	}
 

@@ -10,6 +10,7 @@ import { DebugLog } from './utils/debugHelpers'
 		parse,
 	} from 'date-fns'
 import { ClickMode, DEFAULT_SETTINGS, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings } from './settings'
+import { StringUtils } from './utils/StringUtils'
 
 const getDailyNoteFormat = (app: App) => {
 
@@ -447,6 +448,19 @@ class HabitTrackerSettingTab extends PluginSettingTab {
 					// Only save valid colors or empty string
 					if (!value || isValidCSSColor(value)) {
 						this.plugin.settings.defaultColor = value;
+						await this.plugin.saveSettings();
+					}
+				}));
+
+		new Setting(containerEl)
+			.setName('Default custom order field')
+			.setDesc('Determines which habit frontmatter field will store a custom habit order (updated via drag and drop). Can be overridden with "habitOrderField" in code block.')
+			.addText(text => text
+				.setValue(this.plugin.settings.habitOrderField)
+				.setPlaceholder('habitOrder')
+				.onChange(async (value) => {
+					if (typeof value === 'string' && !StringUtils.isNullOrWhiteSpace(value)) {
+						this.plugin.settings.habitOrderField = value;
 						await this.plugin.saveSettings();
 					}
 				}));
