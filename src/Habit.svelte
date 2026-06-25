@@ -232,7 +232,7 @@
 	const init = async function () {
 		logger.debugLog(() => `Loading habit ${habitName}`)
 
-		const getFrontmatter = async function (file: TAbstractFile | null): Promise<{ entries: readonly string[] }> {
+		const getFrontmatter = async function (file: TAbstractFile | null): Promise<{ entries: readonly string[], title?: string }> {
 
 			if (!isTFile(file)) {
 				logger.debugLog(() => `No file found for path: ${path}`)
@@ -240,27 +240,34 @@
 			}
 
 			try {
-				return await this.app.vault.read(file).then((result) => {
-					const frontmatter = result.split('---')[1]
+				const fmCached = app.metadataCache.getFileCache(file)?.frontmatter
 
-					if (!frontmatter) {
-						return { entries: [] }
-					}
-					const fmParsed = parseYaml(frontmatter)
-					if (fmParsed['entries'] == undefined) {
-						fmParsed['entries'] = []
-					}
+				if (fmCached != null) {
+					return fmCached
+				}
 
-					return fmParsed
-				})
+				const fileContent = await app.vault.cachedRead(file)
+				const frontmatter = fileContent.split('---')[1]
+
+				if (!frontmatter) {
+					return { entries: [] }
+				}
+
+				const fmParsed = parseYaml(frontmatter)
+				if (fmParsed['entries'] == undefined) {
+					fmParsed['entries'] = []
+				}
+
+				return fmParsed
 			} catch (error) {
 				logger.debugLog(() => `Error in habit ${habitName}: error.message`)
 				return { entries: [] }
 			}
 		}
 
-		const file: TAbstractFile | null = this.app.vault.getAbstractFileByPath(path)
-		frontmatter = await getFrontmatter(file)
+		const file: TAbstractFile | null = app.vault.getAbstractFileByPath(path)
+		const frontmatter = await getFrontmatter(file)
+
 		logger.debugLog(() => `Frontmatter for ${path} ↴`)
 		logger.debugLog(() => frontmatter)
 
