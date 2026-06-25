@@ -1,7 +1,7 @@
 <script lang="ts">
 	import {onMount, onDestroy} from 'svelte'
 	import HabitTracker from './HabitTracker.svelte'
-	import { DebugLog } from './debugHelpers'
+	import { DebugLog } from './utils/debugHelpers'
 
 	export let error
 	export let src

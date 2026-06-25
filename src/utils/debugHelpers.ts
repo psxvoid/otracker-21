@@ -7,7 +7,9 @@ export class DebugLog {
 	constructor(private getSettings: () => { debug: boolean }, prefix?: string) {
 		this.prefix = prefix == null
 			? DebugLog.defaultPrefix
-			: `${DebugLog.defaultPrefix} [${prefix}]`
+			: prefix.indexOf(DebugLog.defaultPrefix) !== 0
+			? `${DebugLog.defaultPrefix} [${prefix}]`
+			:	prefix
 	}
 
 	debugLog(createMessage: () => string | object) {
@@ -42,5 +44,9 @@ export class DebugLog {
 		if (error != null) {
 			console.error(error)
 		}
+	}
+
+	scoped(scopePrefix: string): DebugLog {
+		return new DebugLog(this.getSettings, `${this.prefix} [${scopePrefix}]`)
 	}
 }

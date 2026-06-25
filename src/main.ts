@@ -1,15 +1,39 @@
 // TODO Add integration tests with jest
-import {Plugin, Notice, setIcon, App, PluginSettingTab, Setting} from 'obsidian'
+import {Plugin, setIcon, App, PluginSettingTab, Setting, MarkdownRenderChild} from 'obsidian'
 import HabitTracker from './HabitTracker.svelte'
 import HabitTrackerError from './HabitTrackerError.svelte'
 import { getDateAsString, isValidCSSColor } from './utils'
-import { DebugLog } from './debugHelpers'
+import { DebugLog } from './utils/debugHelpers'
 
 	import {
 		format,
 		parse,
 	} from 'date-fns'
 import { ClickMode, DEFAULT_SETTINGS, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings } from './settings'
+import { StringUtils } from './utils/StringUtils'
+
+type Destroyable = { $destroy: () => void }
+
+class SvelteMarkdownRenderChild extends MarkdownRenderChild {
+	private component?: Destroyable
+
+	constructor(
+		containerEl: HTMLElement,
+		private createComponent: (target: HTMLElement) => Destroyable,
+	) {
+		super(containerEl)
+	}
+
+	onload() {
+		this.component = this.createComponent(this.containerEl)
+	}
+
+	onunload() {
+		this.component?.$destroy()
+		this.component = undefined
+		this.containerEl.empty()
+	}
+}
 
 const getDailyNoteFormat = (app: App) => {
 
@@ -123,8 +147,8 @@ export default class HabitTracker21 extends Plugin {
 				this.logger.debugLog(() => `Global settings: ${JSON.stringify(this.settings)}`);
 				this.logger.debugLog(() => `Tracker settings: ${JSON.stringify(userSettings)}`);
 				this.logger.debugLog(() => `Today is ${format(today, 'yyyy-MM-dd')}`);
-				new HabitTracker({
-						target: el,
+				ctx.addChild(new SvelteMarkdownRenderChild(el, (target) => new HabitTracker({
+						target,
 						props: {
 							app: this.app,
 							userSettings,
@@ -136,10 +160,10 @@ export default class HabitTracker21 extends Plugin {
 								},
 							pluginName: this.manifest.name,
 						}
-					})
+					})))
 			} catch(error) {
-				new HabitTrackerError({
-					target: el,
+				ctx.addChild(new SvelteMarkdownRenderChild(el, (target) => new HabitTrackerError({
+					target,
 					props: {
 						error,
 						src,
@@ -147,7 +171,7 @@ export default class HabitTracker21 extends Plugin {
 						app: this.app,
 						globalSettings: this.settings
 					}
-				})
+				})))
 				this.logger.debugError(() => `Received invalid settings`, error as Error)
 			}
 		})
@@ -447,6 +471,19 @@ class HabitTrackerSettingTab extends PluginSettingTab {
 					// Only save valid colors or empty string
 					if (!value || isValidCSSColor(value)) {
 						this.plugin.settings.defaultColor = value;
+						await this.plugin.saveSettings();
+					}
+				}));
+
+		new Setting(containerEl)
+			.setName('Default custom order field')
+			.setDesc('Determines which habit frontmatter field will store a custom habit order (updated via drag and drop). Can be overridden with "habitOrderField" in code block.')
+			.addText(text => text
+				.setValue(this.plugin.settings.habitOrderField)
+				.setPlaceholder('habitOrder')
+				.onChange(async (value) => {
+					if (typeof value === 'string' && !StringUtils.isNullOrWhiteSpace(value)) {
+						this.plugin.settings.habitOrderField = value;
 						await this.plugin.saveSettings();
 					}
 				}));

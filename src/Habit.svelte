@@ -2,14 +2,15 @@
 	import { isValidCSSColor } from './utils'
 
 	import {onDestroy} from 'svelte'
-	import {parseYaml, TFile} from 'obsidian'
+	import {parseYaml, TAbstractFile, TFile} from 'obsidian'
 	import {getDayOfTheWeek} from './utils'
-	import { DebugLog } from './debugHelpers'
+	import { DebugLog } from './utils/debugHelpers'
 	import { differenceInCalendarDays, parseISO, format } from 'date-fns'
-	import { EntryType, HabitEntry, HabitEntryUtils, HabitEntryWithCounter, parseEntry, serializeEntry } from './HabitEntry'
-	import { DateUtils } from './DateUtils'
+	import { EntryType, HabitEntry, HabitEntryUtils, HabitEntryWithCounter, parseEntry, serializeEntry } from './core/HabitEntry'
+	import { DateUtils } from './utils/DateUtils'
 	import { ClickMode, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings } from './settings'
 	import { longclick } from './utils/svelte/longclick'
+	import { StringUtils } from './utils/StringUtils'
 
 	export let app
 	export let name
@@ -26,10 +27,58 @@
 	let savingChanges = false // this helps the file change listner know if we made a change. if not, it reloads the data for the habit
 	let logger = new DebugLog(() => globalSettings, 'Habit')
 	let mergedSettings: HabitTrackerMergedSettings
+	const isTFile = (abstractFile: TAbstractFile | null): abstractFile is TFile => abstractFile != null && abstractFile instanceof TFile
 
 	const enum ClickAction {
 		TickIncrement,
 		Toggle
+	}
+
+	interface FrontmatterTyped {
+		entries: readonly string[],
+		title?: string
+	}
+
+	const getFrontmatter = async function (file: TAbstractFile | null): Promise<FrontmatterTyped> {
+
+		if (!isTFile(file)) {
+			logger.debugLog(() => `No file found for path: ${path}`)
+			return { entries: [] }
+		}
+
+		try {
+			const fmCached = app.metadataCache.getFileCache(file)?.frontmatter
+
+			if (fmCached != null) {
+				return fmCached
+			}
+
+			const fileContent = await app.vault.cachedRead(file)
+			const frontmatter = fileContent.split('---')[1]
+
+			if (!frontmatter) {
+				return { entries: [] }
+			}
+
+			const fmParsed = parseYaml(frontmatter)
+			if (fmParsed['entries'] == undefined) {
+				fmParsed['entries'] = []
+			}
+
+			return fmParsed
+		} catch (error) {
+			logger.debugLog(() => `Error in habit ${habitName}: error.message`)
+			return { entries: [] }
+		}
+	}
+
+	const parseEntries = async (file: TFile) => {
+			const frontmatter = await getFrontmatter(file)
+
+			logger.debugLog(() => `Frontmatter for ${path} ↴`)
+			logger.debugLog(() => frontmatter)
+
+			return frontmatter.entries.map(entryStr => parseEntry(entryStr)).sort(HabitEntryUtils.defaultComparer)
 	}
 
 	// Reactive color resolution - updates whenever frontmatter, userSettings, or globalSettings change
@@ -227,43 +276,20 @@
 		return days
 	})()
 
-	const init = async function () {
+	const init = async function (entriesParsed?: HabitEntry[]) {
 		logger.debugLog(() => `Loading habit ${habitName}`)
 
-		const getFrontmatter = async function (path): Promise<{ entries: readonly string[] }> {
-			const file = this.app.vault.getAbstractFileByPath(path)
+		const file: TAbstractFile | null = app.vault.getAbstractFileByPath(path)
 
-			if (!file || !(file instanceof TFile)) {
-				logger.debugLog(() => `No file found for path: ${path}`)
-				return { entries: [] }
-			}
-
-			try {
-				return await this.app.vault.read(file).then((result) => {
-					const frontmatter = result.split('---')[1]
-
-					if (!frontmatter) {
-						return { entries: [] }
-					}
-					const fmParsed = parseYaml(frontmatter)
-					if (fmParsed['entries'] == undefined) {
-						fmParsed['entries'] = []
-					}
-
-					return fmParsed
-				})
-			} catch (error) {
-				logger.debugLog(() => `Error in habit ${habitName}: error.message`)
-				return { entries: [] }
-			}
+		if (entriesParsed != null) {
+			entries = entriesParsed
+		} else if (isTFile(file)) {
+			entries = await parseEntries(file)
 		}
 
-		frontmatter = await getFrontmatter(path)
-		logger.debugLog(() => `Frontmatter for ${path} ↴`)
-		logger.debugLog(() => frontmatter)
-		entries = frontmatter.entries.map(entryStr => parseEntry(entryStr))
-		entries = entries.sort(HabitEntryUtils.defaultComparer)
-		habitName = frontmatter.title || habitName
+		if (isTFile(file) && !StringUtils.isNullOrWhiteSpace(frontmatter.title) && frontmatter.title !== habitName) {
+			habitName = frontmatter.title
+		}
 
 		logger.debugLog(() => `Habit "${habitName}": Found ${entries.length} entries`)
 		logger.debugLog(() => entries)
@@ -380,11 +406,31 @@
 		}
 	}
 
-	const modifyRef = app.vault.on('modify', (file) => {
+	const modifyRef = app.vault.on('modify', async (file,) => {
 		if (file.path === path) {
 			if (!savingChanges) {
-				logger.debugLog(() => 'oh shit, i was modified')
-				init()
+				const entriesParsed = await parseEntries(file)
+
+				let modified = false
+				if (entries.length !== entriesParsed.length) {
+					modified = true
+				}
+
+				if (!modified) {
+					for(let i = 0; i < entries.length; i++) {
+						if (!HabitEntryUtils.equal(entries[i], entriesParsed[i])) {
+							modified = true
+							break;
+						}
+					}
+				}
+				
+				if (modified) {
+					logger.debugLog(() => 'oh shit, i was modified')
+					init(entriesParsed)
+				} else {
+					logger.debugLog(() => 'i was modified but entries have not changed')
+				}
 			}
 			savingChanges = false
 		}
@@ -399,16 +445,16 @@
 </script>
 
 <!-- <div bind:this={rootElement}> -->
-<div
-	class="habit-tracker__row"
-	style={customStyles}
->
-	<div class="habit-tracker__cell--name habit-tracker__cell">
+	<div class="habit-tracker__cell--name habit-tracker__cell"
+		draggable="true"
+		role="listitem"
+		on:dragstart={(e) => { return false; } }
+		>
 		<a
 			href={path}
 			aria-label={path}
-			class="internal-link">{habitName}</a
-		>
+			class="internal-link">{habitName}
+		</a>
 	</div>
 	{#if renderedDates.length}
 		{#each renderedDates as day}
@@ -432,4 +478,3 @@
 			</div>
 		{/each}
 	{/if}
-</div>
