@@ -529,7 +529,7 @@
 			{#if state.dragAndDrop.isDragStarted }
 			<div class="habit-tracker__row ht21-drag-double" style="top: {state.dragAndDrop.dragDoubleTopOffset}px;">
 			<Habit
-				name={dragController.habit.file.basename}
+				name={getHabitName(dragController.habit)}
 				path={dragController.habit.file.path}
 				dates={state.computed.dates}
 				debug={state.settings.debug}
@@ -619,7 +619,7 @@
 				}}
 		>
 			<Habit
-				name={habit.file.basename}
+				name={getHabitName(habit)}
 				path={habit.file.path}
 				dates={state.computed.dates}
 				debug={state.settings.debug}

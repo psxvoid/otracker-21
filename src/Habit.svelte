@@ -2,7 +2,7 @@
 	import { isValidCSSColor } from './utils'
 
 	import {onDestroy} from 'svelte'
-	import {parseYaml, TFile} from 'obsidian'
+	import {parseYaml, TAbstractFile, TFile} from 'obsidian'
 	import {getDayOfTheWeek} from './utils'
 	import { DebugLog } from './utils/debugHelpers'
 	import { differenceInCalendarDays, parseISO, format } from 'date-fns'
@@ -10,6 +10,7 @@
 	import { DateUtils } from './utils/DateUtils'
 	import { ClickMode, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings } from './settings'
 	import { longclick } from './utils/svelte/longclick'
+	import { StringUtils } from './utils/StringUtils'
 
 	export let app
 	export let name
@@ -26,6 +27,7 @@
 	let savingChanges = false // this helps the file change listner know if we made a change. if not, it reloads the data for the habit
 	let logger = new DebugLog(() => globalSettings, 'Habit')
 	let mergedSettings: HabitTrackerMergedSettings
+	const isTFile = (abstractFile: TAbstractFile | null): abstractFile is TFile => abstractFile != null && abstractFile instanceof TFile
 
 	const enum ClickAction {
 		TickIncrement,
@@ -230,10 +232,9 @@
 	const init = async function () {
 		logger.debugLog(() => `Loading habit ${habitName}`)
 
-		const getFrontmatter = async function (path): Promise<{ entries: readonly string[] }> {
-			const file = this.app.vault.getAbstractFileByPath(path)
+		const getFrontmatter = async function (file: TAbstractFile | null): Promise<{ entries: readonly string[] }> {
 
-			if (!file || !(file instanceof TFile)) {
+			if (!isTFile(file)) {
 				logger.debugLog(() => `No file found for path: ${path}`)
 				return { entries: [] }
 			}
@@ -258,12 +259,16 @@
 			}
 		}
 
-		frontmatter = await getFrontmatter(path)
+		const file: TAbstractFile | null = this.app.vault.getAbstractFileByPath(path)
+		frontmatter = await getFrontmatter(file)
 		logger.debugLog(() => `Frontmatter for ${path} ↴`)
 		logger.debugLog(() => frontmatter)
-		entries = frontmatter.entries.map(entryStr => parseEntry(entryStr))
-		entries = entries.sort(HabitEntryUtils.defaultComparer)
-		habitName = frontmatter.title || habitName
+
+		entries = frontmatter.entries.map(entryStr => parseEntry(entryStr)).sort(HabitEntryUtils.defaultComparer)
+
+		if (isTFile(file) && !StringUtils.isNullOrWhiteSpace(frontmatter.title) && frontmatter.title !== habitName) {
+			habitName = frontmatter.title
+		}
 
 		logger.debugLog(() => `Habit "${habitName}": Found ${entries.length} entries`)
 		logger.debugLog(() => entries)
