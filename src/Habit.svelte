@@ -6,7 +6,7 @@
 	import {getDayOfTheWeek} from './utils'
 	import { DebugLog } from './utils/debugHelpers'
 	import { differenceInCalendarDays, parseISO, format } from 'date-fns'
-	import { EntryType, HabitEntry, HabitEntryUtils, HabitEntryWithCounter, parseEntry, serializeEntry } from './HabitEntry'
+	import { EntryType, HabitEntry, HabitEntryUtils, HabitEntryWithCounter, parseEntry, serializeEntry } from './core/HabitEntry'
 	import { DateUtils } from './utils/DateUtils'
 	import { ClickMode, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings } from './settings'
 	import { longclick } from './utils/svelte/longclick'

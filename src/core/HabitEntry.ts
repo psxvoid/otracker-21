@@ -1,5 +1,5 @@
-import { DateUtils } from "./utils/DateUtils"
-import { StringUtils } from "./utils/StringUtils"
+import { DateUtils } from "../utils/DateUtils"
+import { StringUtils } from "../utils/StringUtils"
 
 export const enum EntryType {
 	Legacy,
