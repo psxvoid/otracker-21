@@ -5,7 +5,7 @@
 		getDailyNote,
 		getAllDailyNotes,
 	} from 'obsidian-daily-notes-interface'
-	import {onMount, onDestroy, SvelteComponent_1} from 'svelte'
+	import {onMount, onDestroy} from 'svelte'
 
 	import Habit from './Habit.svelte'
 
