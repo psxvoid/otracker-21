@@ -34,6 +34,53 @@
 		Toggle
 	}
 
+	interface FrontmatterTyped {
+		entries: readonly string[],
+		title?: string
+	}
+
+	const getFrontmatter = async function (file: TAbstractFile | null): Promise<FrontmatterTyped> {
+
+		if (!isTFile(file)) {
+			logger.debugLog(() => `No file found for path: ${path}`)
+			return { entries: [] }
+		}
+
+		try {
+			const fmCached = app.metadataCache.getFileCache(file)?.frontmatter
+
+			if (fmCached != null) {
+				return fmCached
+			}
+
+			const fileContent = await app.vault.cachedRead(file)
+			const frontmatter = fileContent.split('---')[1]
+
+			if (!frontmatter) {
+				return { entries: [] }
+			}
+
+			const fmParsed = parseYaml(frontmatter)
+			if (fmParsed['entries'] == undefined) {
+				fmParsed['entries'] = []
+			}
+
+			return fmParsed
+		} catch (error) {
+			logger.debugLog(() => `Error in habit ${habitName}: error.message`)
+			return { entries: [] }
+		}
+	}
+
+	const parseEntries = async (file: TFile) => {
+			const frontmatter = await getFrontmatter(file)
+
+			logger.debugLog(() => `Frontmatter for ${path} ↴`)
+			logger.debugLog(() => frontmatter)
+
+			return frontmatter.entries.map(entryStr => parseEntry(entryStr)).sort(HabitEntryUtils.defaultComparer)
+	}
+
 	// Reactive color resolution - updates whenever frontmatter, userSettings, or globalSettings change
 	$: {
 		mergedSettings = mergeSettings(globalSettings, userSettings)
@@ -229,49 +276,16 @@
 		return days
 	})()
 
-	const init = async function () {
+	const init = async function (entriesParsed?: HabitEntry[]) {
 		logger.debugLog(() => `Loading habit ${habitName}`)
 
-		const getFrontmatter = async function (file: TAbstractFile | null): Promise<{ entries: readonly string[], title?: string }> {
-
-			if (!isTFile(file)) {
-				logger.debugLog(() => `No file found for path: ${path}`)
-				return { entries: [] }
-			}
-
-			try {
-				const fmCached = app.metadataCache.getFileCache(file)?.frontmatter
-
-				if (fmCached != null) {
-					return fmCached
-				}
-
-				const fileContent = await app.vault.cachedRead(file)
-				const frontmatter = fileContent.split('---')[1]
-
-				if (!frontmatter) {
-					return { entries: [] }
-				}
-
-				const fmParsed = parseYaml(frontmatter)
-				if (fmParsed['entries'] == undefined) {
-					fmParsed['entries'] = []
-				}
-
-				return fmParsed
-			} catch (error) {
-				logger.debugLog(() => `Error in habit ${habitName}: error.message`)
-				return { entries: [] }
-			}
-		}
-
 		const file: TAbstractFile | null = app.vault.getAbstractFileByPath(path)
-		const frontmatter = await getFrontmatter(file)
 
-		logger.debugLog(() => `Frontmatter for ${path} ↴`)
-		logger.debugLog(() => frontmatter)
-
-		entries = frontmatter.entries.map(entryStr => parseEntry(entryStr)).sort(HabitEntryUtils.defaultComparer)
+		if (entriesParsed != null) {
+			entries = entriesParsed
+		} else if (isTFile(file)) {
+			entries = await parseEntries(file)
+		}
 
 		if (isTFile(file) && !StringUtils.isNullOrWhiteSpace(frontmatter.title) && frontmatter.title !== habitName) {
 			habitName = frontmatter.title
@@ -392,11 +406,31 @@
 		}
 	}
 
-	const modifyRef = app.vault.on('modify', (file) => {
+	const modifyRef = app.vault.on('modify', async (file,) => {
 		if (file.path === path) {
 			if (!savingChanges) {
-				logger.debugLog(() => 'oh shit, i was modified')
-				init()
+				const entriesParsed = await parseEntries(file)
+
+				let modified = false
+				if (entries.length !== entriesParsed.length) {
+					modified = true
+				}
+
+				if (!modified) {
+					for(let i = 0; i < entries.length; i++) {
+						if (!HabitEntryUtils.equal(entries[i], entriesParsed[i])) {
+							modified = true
+							break;
+						}
+					}
+				}
+				
+				if (modified) {
+					logger.debugLog(() => 'oh shit, i was modified')
+					init(entriesParsed)
+				} else {
+					logger.debugLog(() => 'i was modified but entries have not changed')
+				}
 			}
 			savingChanges = false
 		}
