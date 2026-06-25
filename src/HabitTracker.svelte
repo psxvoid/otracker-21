@@ -318,7 +318,10 @@
 				.map((file, index) => {
 					const fmCache = app.metadataCache.getFileCache(file)?.frontmatter ?? {}
 					const firstPassOrder = index + 1
-					const secondPassOrder = parseHabitOrder(fmCache[state.settings.habitOrderField], 1, filesOnly.length)
+					const parsedSecondPassOrder = parseHabitOrder(fmCache[state.settings.habitOrderField], 1, filesOnly.length)
+					const secondPassOrder = parsedSecondPassOrder != null && secondPassOrderMap.has(parsedSecondPassOrder)
+						? undefined // prevent duplicate order items to interfere
+						: parsedSecondPassOrder
 					const title = fmCache['title']
 					
 					const habitData: HabitData = { file, title, firstPassOrder, secondPassOrder }
