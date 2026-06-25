@@ -333,9 +333,10 @@
 					return habitData
 				})
 
-			const result: HabitData[] = []
-			let indexIncrement = 0;
 			if (hasCustomOrder) {
+				const result: HabitData[] = []
+				let indexIncrement = 0;
+
 				for (let i = 1; i <= sortedFiles.length; i++) {
 					const customOrderHabit = secondPassOrderMap.get(i)
 
