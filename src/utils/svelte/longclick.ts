@@ -1,4 +1,4 @@
-export function longclick(node: HTMLElement, [duration, mode]: [number, 'default' | 'touch-drag']) {
+export function longclick(node: HTMLElement, [durationMs, mode]: [number, 'default' | 'touch-drag']) {
 	let timer
 	let isDownEventFired: boolean = false
 	let isLongClickActivated: boolean = false
@@ -26,7 +26,7 @@ export function longclick(node: HTMLElement, [duration, mode]: [number, 'default
 				}
 			}, 500)
 			window?.navigator?.vibrate(50)
-		}, duration)
+		}, durationMs)
 	}
 
 	const commonAbort = () => {
