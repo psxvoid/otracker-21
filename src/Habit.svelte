@@ -23,9 +23,8 @@
 	let entries: HabitEntry[] = []
 	let frontmatter: { entries: readonly string[], color?: string, maxGap?: number, title?: string } = { entries: [] }
 	let habitName = name
-	let customStyles = ''
 	let savingChanges = false // this helps the file change listner know if we made a change. if not, it reloads the data for the habit
-	let logger = new DebugLog(() => globalSettings, 'Habit')
+	let logger = new DebugLog(() => globalSettings, () => 'Habit')
 	let mergedSettings: HabitTrackerMergedSettings
 	const isTFile = (abstractFile: TAbstractFile | null): abstractFile is TFile => abstractFile != null && abstractFile instanceof TFile
 
@@ -277,7 +276,7 @@
 	})()
 
 	const init = async function (entriesParsed?: HabitEntry[]) {
-		logger.debugLog(() => `Loading habit ${habitName}`)
+		logger.debugLog(() => `Loading habit '${habitName}'`)
 
 		const file: TAbstractFile | null = app.vault.getAbstractFileByPath(path)
 
@@ -318,7 +317,8 @@
 		}
 	}
 
-	const toggleHabit = function (e: MouseEvent & KeyboardEvent, date: string, isLongClick: boolean) {
+	const toggleHabit = function (event: MouseEvent & KeyboardEvent, date: string, isLongClick: boolean) {
+		event.stopPropagation()
 		const file = this.app.vault.getAbstractFileByPath(path)
 		if (!file || !(file instanceof TFile)) {
 			new Notice(`${pluginName}: file missing while trying to toggle habit`)
@@ -331,12 +331,12 @@
 
 		let newEntries: HabitEntry[] = [...entries]
 
-		const clickAction = getClickAction({ isShiftPressed: e.shiftKey, isLongClick })
+		const clickAction = getClickAction({ isShiftPressed: event.shiftKey, isLongClick })
 
 		if (existingEntry != null) {
 			if (clickAction === ClickAction.Toggle) {
 				logger.debugLog(() => 'Untick...')
-				newEntries = newEntries.filter(e => !HabitEntryUtils.equal(e, existingEntry))
+				newEntries = newEntries.filter(x => !HabitEntryUtils.equal(x, existingEntry))
 			} else {
 				logger.debugLog(() => 'Tick...')
 				if (existingEntry.type === EntryType.Counter) {
@@ -446,9 +446,8 @@
 
 <!-- <div bind:this={rootElement}> -->
 	<div class="habit-tracker__cell--name habit-tracker__cell"
-		draggable="true"
+		draggable="false"
 		role="listitem"
-		on:dragstart={(e) => { return false; } }
 		>
 		<a
 			href={path}
@@ -466,8 +465,8 @@
 				on:mouseenter={(e) => { showTooltip(e, day); } }
 				on:mouseleave={hideTooltip}
 				on:click={(e) => toggleHabit(e, day.date, false)}
-				use:longclick={1000}
-				on:longclick={ (e) => toggleHabit(e, day.date, true) }
+				use:longclick={{durationMs: 1000, logger }}
+				on:longclick={ (e) => toggleHabit(e.sourceEvent, day.date, true) }
 			>
 				<span
 					class="habit-tick__inner"
