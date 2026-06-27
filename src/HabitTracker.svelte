@@ -26,7 +26,7 @@
 	import { getHabitName, HabitData } from './core/HabitData'
 	import { DragAndDropController } from './DragAndDropController'
 	import { DomUtils, getTouchFromEvent } from './utils/DomUtils'
-	import { TouchHoverIndexFromDataset } from './utils/TouchHelpers'
+	import { TouchHoverIndexFromDataset } from './utils/TouchHoverIndexFromDataset'
 
 	// TypeScript interfaces for better state management
 	interface HabitTrackerSettings {
