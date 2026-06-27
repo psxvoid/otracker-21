@@ -8,6 +8,7 @@
 	import {onMount, onDestroy} from 'svelte'
 
 	import Habit from './Habit.svelte'
+	import { longclick } from './utils/svelte/longclick'
 
 	import {
 		TFile,
@@ -544,6 +545,16 @@
 		}
 	}
 
+	const onRowClickOpenHabit = (e: MouseEvent) => {
+		if (e.target instanceof HTMLElement) {
+			const habitLink = e.target.tagName === 'a'
+				? e.target
+				: e.target.find('a')
+			
+			habitLink?.click()
+		}
+	}
+
 	// Listen for settings refresh events
 	let refreshEventListener: (event: CustomEvent) => void
 	let vaultCreateRef: any
@@ -673,6 +684,7 @@
 			></Habit></div>
 			{/if}
 		{#each state.computed.habits as habit, index (habit.file.path)}
+		<!-- svelte-ignore a11y-click-events-have-key-events -->
 		<div 
 				class="habit-tracker__row {state.dragAndDrop.isDragStarted && dragController.hoverIndex === index ? 'h21-opaque' : ''}"
 				draggable="true"
@@ -707,7 +719,9 @@
 
 					finishDrag()
 				})}
-				on:touchstart|nonpassive={(e) => dragDebugEventWrapper(habit, e, index, (e) => {
+				on:click={(e) => onRowClickOpenHabit(e)}
+				use:longclick={[1000,'touch-drag']}
+				on:longclick={ (e) => dragDebugEventWrapper(habit, e.detail, index, (e) => {
 					const logger = getDragScopedEventLogger(habit, e)
 
 					if (isDragStarted() || isTouchStarted) {
@@ -721,8 +735,6 @@
 					}
 
 					isTouchStarted = true
-
-					e.preventDefault()
 
 					startDrag(habit, index, e)
 

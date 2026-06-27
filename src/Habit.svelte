@@ -465,7 +465,7 @@
 				on:mouseenter={(e) => { showTooltip(e, day); } }
 				on:mouseleave={hideTooltip}
 				on:click={(e) => toggleHabit(e, day.date, false)}
-				use:longclick={1000}
+				use:longclick={[1000, 'default']}
 				on:longclick={ (e) => toggleHabit(e, day.date, true) }
 			>
 				<span
