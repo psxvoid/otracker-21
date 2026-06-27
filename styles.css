@@ -221,6 +221,7 @@ div:has(.block-language-habittracker),
 	background-color: var(--habit-highlight-names);
 	cursor: grab;
 	user-select: none;
+	touch-action: none;
 }
 .habit-tracker__cell--name .internal-link {
 	color: var(--habit-name-text-color);
