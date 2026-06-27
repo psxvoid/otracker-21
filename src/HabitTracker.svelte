@@ -25,7 +25,8 @@
 	import {DebugLog} from './utils/debugHelpers'
 	import { getHabitName, HabitData } from './core/HabitData'
 	import { DragAndDropController } from './DragAndDropController'
-	import { DomUtils } from './utils/DomUtils'
+	import { DomUtils, getTouchFromEvent } from './utils/DomUtils'
+	import { TouchHoverIndexFromDataset } from './utils/TouchHelpers'
 
 	// TypeScript interfaces for better state management
 	interface HabitTrackerSettings {
@@ -97,17 +98,51 @@
 		habitOrderField: string
 	}>
 
-	let dragController: DragAndDropController = {} as DragAndDropController
+	const createMockController = () => ({
+		destroyDragController: function() {},
+		updateDragDoubleTop: function() {},
+		swapHabits: function() {}
+	} as unknown as DragAndDropController)
+
+	let dragController: DragAndDropController = createMockController()
+
 	const destroyDragController = () => {
-		dragController = {} as DragAndDropController
+		dragController = createMockController()
 		state.dragAndDrop = {
 			isDragStarted: false,
 			dragDoubleTopOffset: -1,
 		}
+		isTouchStarted = false
 	}
 	const isDragStarted = () => dragController instanceof DragAndDropController
+	let isTouchStarted: boolean = false
+	const touchHoverIndexer = new TouchHoverIndexFromDataset(
+		'.habit-tracker__row[data-ht21-habit-index]',
+		'ht21HabitIndex',
+		() => isDragStarted() && isTouchStarted,
+		(hoverIndex) => dragController.hoverIndex = hoverIndex
+	)
+	
+	const getTouchHoverIndex = (e: TouchEvent) => touchHoverIndexer.processTouchEvent(e)
 
-	const logger = new DebugLog(() => state.settings, 'HabitTracker')
+	const logger = new DebugLog(() => state.settings, () => 'HabitTracker')
+	const getDragScopedEventLogger = (habit: HabitData, e: { type: string }) => {
+		return logger.scoped(() => 'drag').scoped(() => getHabitName(habit)).scoped(() => e.type)
+	}
+	const dragDebugEventWrapper = <T extends Event>(habit: HabitData, e: T, index: number, func: (e: T, ...funcArgs: any[]) => any, ...args: any[]) => {
+		const logger = getDragScopedEventLogger(habit, e)
+		let hasError: boolean = true
+		try {
+			logger.debugLog(() => `Entry index: ${index}`)
+			func(e, ...args)
+			hasError = false
+			logger.debugLog(() => `Done without errors.`)
+		} finally {
+			if (hasError) {
+				logger.debugLog(() => `Ended with an exception.`)
+			}
+		}
+	}
 
 	const parseHabitOrder = (habitOrder: undefined | number | null, min: number, max: number): number | undefined => {
 		if (habitOrder == null || typeof habitOrder !== 'number' || !Number.isInteger(habitOrder) || habitOrder < min || habitOrder > max) {
@@ -235,11 +270,8 @@
 		state.computed.habits = getHabits(state.settings.path)
 		if (state.computed.habits && state.computed.habits.length) {
 			const count = state.computed.habits.length
-			logger.debugLog(
-				() =>
-					`Found ${count} ${pluralize(count, 'habit')} at "${state.settings.path}" ↴`,
-			)
-			logger.debugLog(() => state.computed.habits.map((habit) => habit.path))
+			logger.debugLog(() => `Found ${count} ${pluralize(count, 'habit')} at "${state.settings.path}" ↴`)
+			logger.debugLog(() => state.computed.habits)
 		} else {
 			// TODO add a button so they can create a habit
 			state.ui.fatalError = `No habits found at "${state.settings.path}"`
@@ -394,6 +426,7 @@
 	$: {
 		if (isDragStarted() && dragController.dragIndex !== dragController.hoverIndex) {
 			logger.debugLog(() => `Drag: Swapping habits: ${dragController.dragIndex} and ${dragController.hoverIndex}`)
+
 			const habits = dragController.swapHabits()
 
 			if (habits !== state.computed.habits) {
@@ -412,6 +445,103 @@
 		document.body.appendChild(dragImage)
 		event.dataTransfer?.setDragImage(dragImage, 0, 0)
 		setTimeout(() => dragImage.remove(), 0)
+	}
+
+	const computeDragOffsetY = (event: MouseEvent | TouchEvent | DragEvent): number => {
+		const rootElementOffsetY = state?.ui?.rootElement != null
+			? state.ui.rootElement.getBoundingClientRect().top
+			: 0
+
+		logger.debugLog(() => `Root element offset is ${rootElementOffsetY}.`)
+
+		const clientY = DomUtils.getEventClientY(event)
+	
+		logger.debugLog(() => `Drag clientY is ${clientY}.`)
+
+		const dragContainerOffsetY = event.target instanceof HTMLElement
+			? event.target.closest<HTMLElement>('.habit-tracker__row')?.getBoundingClientRect().y
+				?? event.target.getBoundingClientRect().y
+			: 0
+		
+		logger.debugLog(() => `Drag container offset is ${dragContainerOffsetY}.`)
+
+		return dragContainerOffsetY - rootElementOffsetY - clientY
+	}
+
+	const startDrag = (
+		habit: HabitData,
+		index: number,
+		event: MouseEvent | TouchEvent | DragEvent | PointerEvent
+	) => {
+		const dragContainerOffsetY = computeDragOffsetY(event)
+
+		updateDragAndDropState({ isDragStarted: true })
+
+		dragController = new DragAndDropController(
+			habit, index, dragContainerOffsetY,
+			() => state.computed.habits,
+			() => updateDragAndDropState({ dragDoubleTopOffset: dragController.dragDoubleTopOffset }),
+			logger.scoped(() => 'DragCtrl')
+		)
+		dragController.updateDragDoubleTop(DomUtils.getEventClientY(event))
+	}
+
+	const finishDragMockEvent = { type: 'finishDrag' }
+	const finishDrag = () => {
+		if (!isDragStarted()) return
+
+		const index = dragController.dragIndex
+		const habit = dragController.habit
+		const logger = getDragScopedEventLogger(habit, finishDragMockEvent)
+
+		try {
+			const toUpdateHabits = dragController.computeHabitOrderUpdates(index, state.computed.habits)
+
+			if (toUpdateHabits.length === 0) {
+				logger.debugLog(() => `Habit '${getHabitName(habit)}' has dragged to the same place.`)
+				return
+			}
+
+			for (const { habit, newIndex } of toUpdateHabits) {
+				if (habit.secondPassOrder === newIndex) {
+					// hasn't changed, skip
+					continue
+				}
+
+				app.fileManager.processFrontMatter(
+					habit.file,
+					(frontmatter) => {
+						const habitOrderField = state.settings.habitOrderField
+						frontmatter[habitOrderField] = newIndex
+						habit.secondPassOrder = newIndex
+					},
+				)
+			}
+			logger.debugLog(() => `Save updates:`)
+			logger.debugLog(() => toUpdateHabits)
+		} finally {
+			destroyDragController()
+		}
+	}
+
+	const onTouchMoveUpdateDragDouble = (e: TouchEvent) => {
+		if (!isDragStarted() || !isTouchStarted) return
+
+		const touch = getTouchFromEvent(e)
+
+		dragController.updateDragDoubleTop(touch.clientY)
+	}
+
+	const onTouchEndFinishDrag = (e: TouchEvent) => {
+		if (!isDragStarted() || !isTouchStarted) return
+
+		finishDrag()
+	}
+
+	const onTouchCancelDestroyDrag = (e: TouchEvent) => {
+		if (isDragStarted()) {
+			destroyDragController()
+		}
 	}
 
 	// Listen for settings refresh events
@@ -491,7 +621,9 @@
 	init(userSettings)
 </script>
 
-<!-- <svelte:window bind:innerWidth /> -->
+<svelte:window
+	on:touchmove|nonpassive={getTouchHoverIndex}
+/>
 {#if state.ui.fatalError}
 	<div>
 		<strong>🛑 {pluginName}</strong>
@@ -544,83 +676,61 @@
 		<div 
 				class="habit-tracker__row {state.dragAndDrop.isDragStarted && dragController.hoverIndex === index ? 'h21-opaque' : ''}"
 				draggable="true"
+				data-ht21-habit-index={index}
 				role="row" tabindex="{index}"
-				on:dragstart={(e) => {
-					logger.debugLog(() => `Dragstart: '${getHabitName(habit)}', index: ${index}`)
+				on:dragstart={(e) => dragDebugEventWrapper(habit, e, index, (e) => {
+					const logger = getDragScopedEventLogger(habit, e)
 
 					hideNativeDragElement(e)
-
-					const rootElementOffsetY = state?.ui?.rootElement != null
-						? state.ui.rootElement.getBoundingClientRect().top
-						: 0
-
-					if (rootElementOffsetY === 0) {
-						logger.debugLog(() => `Root element offset is ZERO.`)
+					if (isDragStarted()) {
+						logger.debugLog(() => `Already started.`)
+						return
 					}
 
-					const dragContainerOffsetY = DomUtils.isTargetHTMLElement(e)
-						? e.target.getBoundingClientRect().y - e.clientY - rootElementOffsetY
-						: 0
-
-					if (dragContainerOffsetY === 0) {
-						logger.debugLog(() => `Drag container offset is ZERO.`)
-					}
-
-					updateDragAndDropState({ isDragStarted: true })
-
-					dragController = new DragAndDropController(
-						habit, index, dragContainerOffsetY,
-						() => state.computed.habits,
-						() => updateDragAndDropState({ dragDoubleTopOffset: dragController.dragDoubleTopOffset }),
-						logger.scoped('DragCtrl')
-					)
-					dragController.updateDragDoubleTop(e.clientY)
-					
-					logger.debugLog(() => `Dragstart '${getHabitName(habit)}'', offsetY: ${dragContainerOffsetY}`)
-				}}
+					startDrag(habit, index, e)
+				})}
 				on:drag={(e) => {
 					dragController.updateDragDoubleTop(e.clientY)
 					// logger.debugLog(() => `Drag clientY: ${e.clientY}`)
 				}}
-				on:dragover={(e) => {
+				on:dragover={(e) => dragDebugEventWrapper(habit, e, index, (e) => {
 					e.preventDefault()
 					dragController.updateDragDoubleTop(e.clientY)
 					dragController.hoverIndex = index
-					logger.debugLog(() => `Dragover: '${getHabitName(habit)}', hover index: ${index}`)
-				}}
-				on:dragend={(e) => {
-					logger.debugLog(() => `Dragend: '${getHabitName(habit)}', index: ${index}.`)
-
-					try {
-						const toUpdateHabits = dragController.computeHabitOrderUpdates(index, state.computed.habits)
-
-						if (toUpdateHabits.length === 0) {
-							logger.debugLog(() => `Habit '${getHabitName(habit)}' has dragged to the same place.`)
-							return
-						}
-
-						for (const { habit, newIndex } of toUpdateHabits) {
-							if (habit.secondPassOrder === newIndex) {
-								// hasn't changed, skip
-								continue
-							}
-
-							this.app.fileManager.processFrontMatter(
-								habit.file,
-								(frontmatter) => {
-									const habitOrderField = state.settings.habitOrderField
-									frontmatter[habitOrderField] = newIndex
-									habit.secondPassOrder = newIndex
-								},
-							)
-						}
-						logger.debugLog(() => `Dragend: no errors. Updates:`)
-						logger.debugLog(() => toUpdateHabits)
-					} finally {
-						destroyDragController()
-						logger.debugLog(() => `Dragend: finally.`)
+				})}
+				on:dragend={(e) => dragDebugEventWrapper(habit, e, index, (e) => {
+					if (!isDragStarted() || isTouchStarted) {
+						const logger = getDragScopedEventLogger(habit, e)
+						logger.debugLog(() => isTouchStarted ? 'Skipping due to touch start.' : 'already started')
+						return
 					}
-				}}
+
+					finishDrag()
+				})}
+				on:touchstart|nonpassive={(e) => dragDebugEventWrapper(habit, e, index, (e) => {
+					const logger = getDragScopedEventLogger(habit, e)
+
+					if (isDragStarted() || isTouchStarted) {
+						logger.debugLog(() => `Already started.`)
+						return
+					}
+
+					if (!(e.target instanceof HTMLElement) || !e.target.closest('.habit-tracker__cell--name')) {
+						logger.debugLog(() => `Unable to get cell name element.`)
+						return
+					}
+
+					isTouchStarted = true
+
+					e.preventDefault()
+
+					startDrag(habit, index, e)
+
+					logger.debugLog(() => `Drag is successfully started.`)
+				})}
+				on:touchmove|nonpassive={onTouchMoveUpdateDragDouble}
+				on:touchend={(e) => dragDebugEventWrapper(habit, e, index, onTouchEndFinishDrag)}
+				on:touchcancel={(e) => dragDebugEventWrapper(habit, e, index, onTouchCancelDestroyDrag)}
 		>
 			<Habit
 				name={getHabitName(habit)}

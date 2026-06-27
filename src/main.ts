@@ -100,7 +100,7 @@ const getCurrentDailyNoteDate = (app: App, sourcePath: string, logger: DebugLog)
 
 export default class HabitTracker21 extends Plugin {
 	settings: HabitTrackerSettings;
-	private logger: DebugLog = new DebugLog(() => this.settings);
+	private logger: DebugLog = new DebugLog(() => this.settings, () => 'Plugin');
 
 	async onload() {
 		await this.loadSettings();

@@ -12,7 +12,7 @@
 	let prettyError = ''
 	let componentContainer: HTMLElement
 	let refreshEventListener: (event: CustomEvent) => void
-	let logger = new DebugLog(() => globalSettings, "HabitTrackerError")
+	let logger = new DebugLog(() => globalSettings, () => "HabitTrackerError")
 
 	// TODO show the action bar when there's an error
 	function init() {

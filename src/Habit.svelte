@@ -23,9 +23,8 @@
 	let entries: HabitEntry[] = []
 	let frontmatter: { entries: readonly string[], color?: string, maxGap?: number, title?: string } = { entries: [] }
 	let habitName = name
-	let customStyles = ''
 	let savingChanges = false // this helps the file change listner know if we made a change. if not, it reloads the data for the habit
-	let logger = new DebugLog(() => globalSettings, 'Habit')
+	let logger = new DebugLog(() => globalSettings, () => 'Habit')
 	let mergedSettings: HabitTrackerMergedSettings
 	const isTFile = (abstractFile: TAbstractFile | null): abstractFile is TFile => abstractFile != null && abstractFile instanceof TFile
 
@@ -277,7 +276,7 @@
 	})()
 
 	const init = async function (entriesParsed?: HabitEntry[]) {
-		logger.debugLog(() => `Loading habit ${habitName}`)
+		logger.debugLog(() => `Loading habit '${habitName}'`)
 
 		const file: TAbstractFile | null = app.vault.getAbstractFileByPath(path)
 
