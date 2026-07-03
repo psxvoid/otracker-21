@@ -67,13 +67,13 @@ div:has(.block-language-habittracker),
 }
 
 /* Show action bar on hover of the code block or its parent container */
-.markdown-source-view.mod-cm6 .cm-content > .cm-lang-habittracker:hover {
+.markdown-source-view.mod-cm6 .cm-content>.cm-lang-habittracker:hover {
 	overflow: visible;
 	contain: none !important;
 }
+
 .cm-lang-habittracker:hover .ht21-action-bar,
-.cm-preview-code-block.markdown-rendered:has(.block-language-habittracker):hover
-	.ht21-action-bar {
+.cm-preview-code-block.markdown-rendered:has(.block-language-habittracker):hover .ht21-action-bar {
 	opacity: 1;
 	pointer-events: all;
 	top: 100%;
@@ -142,13 +142,12 @@ div:has(.block-language-habittracker),
 .cm-lang-habittracker {
 	position: relative;
 }
-.cm-preview-code-block.markdown-rendered:has(
-		.block-language-habittracker
-	):hover {
+
+.cm-preview-code-block.markdown-rendered:has(.block-language-habittracker):hover {
 	background-color: var(--habit-container-hover);
 }
-.cm-preview-code-block.markdown-rendered:has(.block-language-habittracker):hover
-	.edit-block-button {
+
+.cm-preview-code-block.markdown-rendered:has(.block-language-habittracker):hover .edit-block-button {
 	display: none !important;
 }
 
@@ -163,32 +162,27 @@ div:has(.block-language-habittracker),
 
 .habit-tracker {
 	display: grid;
-	grid-template-columns: 1fr repeat(
-			var(--date-columns),
-			var(--habit-cell-width)
-		);
+	grid-template-columns: 1fr repeat(var(--date-columns),
+			var(--habit-cell-width));
 	position: relative;
 	width: fit-content;
 	background-color: var(--habit-bg);
 }
 
 .is-readable-line-width .habit-tracker--match-line-length {
-	min-width: calc(
-		var(--file-line-width) - 2px
-	); /* TODO: this is a hack since I know the widht of the border. but it won't scale. figure out a way to fix this that hopefully doesn't break overrides people added in place */
+	min-width: calc(var(--file-line-width) - 2px);
+	/* TODO: this is a hack since I know the widht of the border. but it won't scale. figure out a way to fix this that hopefully doesn't break overrides people added in place */
 }
 
 .habit-tracker__row {
 	display: grid;
 	grid-column: 1 / -1;
-	grid-template-columns: 1fr repeat(
-			var(--date-columns),
-			var(--habit-cell-width)
-		);
+	grid-template-columns: 1fr repeat(var(--date-columns),
+			var(--habit-cell-width));
 	position: relative;
 }
 
-.habit-tracker__row:has(.habit-tracker__cell:hover) > .habit-tracker__cell {
+.habit-tracker__row:has(.habit-tracker__cell:hover)>.habit-tracker__cell {
 	background-color: var(--habit-row-bg-hover);
 }
 
@@ -202,12 +196,15 @@ div:has(.block-language-habittracker),
 	justify-content: center;
 	user-select: none;
 }
+
 .habit-tracker__cell:not(:last-child) {
 	border-right: var(--habit-vertical-border);
 }
+
 .habit-tracker__row:not(.habit-tracker__header) .habit-tracker__cell {
 	border-top: var(--habit-horizontal-border);
 }
+
 /*
 */
 
@@ -224,6 +221,7 @@ div:has(.block-language-habittracker),
 	user-select: none;
 	touch-action: none;
 }
+
 .habit-tracker__cell--name .internal-link {
 	color: var(--habit-name-text-color);
 	max-width: 100%;
@@ -238,9 +236,8 @@ div:has(.block-language-habittracker),
 	touch-action: none;
 	pointer-events: none;
 }
-.is-readable-line-width
-	.habit-tracker--match-line-length
-	{
+
+.is-readable-line-width .habit-tracker--match-line-length {
 	max-width: 100%;
 }
 
@@ -254,6 +251,7 @@ div:has(.block-language-habittracker),
 .habit-tracker__header .habit-tracker__cell[data-ht21-pretty-date] {
 	position: relative;
 }
+
 .habit-tracker__header .habit-tracker__cell[data-ht21-pretty-date]:hover {
 	cursor: pointer;
 	background: var(--habit-header-bg-hover);
@@ -274,8 +272,8 @@ div:has(.block-language-habittracker),
 	transform: translateX(-50%);
 	border-radius: var(--habit-tooltip-radius);
 }
-.habit-tracker__header
-	.habit-tracker__cell[data-ht21-pretty-date]:last-child:hover:after {
+
+.habit-tracker__header .habit-tracker__cell[data-ht21-pretty-date]:last-child:hover:after {
 	left: auto;
 	right: 0;
 	transform: none;
@@ -292,6 +290,7 @@ div:has(.block-language-habittracker),
 	padding-right: var(--habit-streak-padding);
 	line-height: var(--habit-tick-size);
 }
+
 .habit-tick:hover {
 	cursor: pointer;
 	background-color: var(--habit-tick-hover) !important;
@@ -314,6 +313,7 @@ div:has(.block-language-habittracker),
 	padding-left: 0;
 	padding-right: 0;
 }
+
 .habit-tick--streak .habit-tick__inner {
 	border-radius: 0;
 }
@@ -321,18 +321,22 @@ div:has(.block-language-habittracker),
 .habit-tick--streak-start {
 	padding-left: var(--habit-streak-padding);
 }
+
 .habit-tick--streak-start .habit-tick__inner {
 	border-top-left-radius: var(--habit-streak-radius);
 	border-bottom-left-radius: var(--habit-streak-radius);
 }
+
 .habit-tick--streak-end {
 	padding-right: var(--habit-streak-padding);
 }
+
 .habit-tick--streak-end .habit-tick__inner {
 	border-top-right-radius: var(--habit-streak-radius);
 	border-bottom-right-radius: var(--habit-streak-radius);
 }
-.habit-tick--streak + .habit-tick--streak-end .habit-tick__inner,
+
+.habit-tick--streak+.habit-tick--streak-end .habit-tick__inner,
 .habit-tick--streak-count .habit-tick__inner {
 	font-weight: bold;
 }
@@ -342,7 +346,8 @@ div:has(.block-language-habittracker),
 	background: var(--habit-bg-ticked);
 	height: 8px;
 }
-.habit-tick--ticked + .habit-tick--gap-default:before {
+
+.habit-tick--ticked+.habit-tick--gap-default:before {
 	display: inline-block;
 	content: '';
 	width: calc(var(--habit-tick-size) / 2);
@@ -353,6 +358,7 @@ div:has(.block-language-habittracker),
 	flex: auto 0 0;
 	margin-right: calc(var(--habit-tick-size) / -2);
 }
+
 .habit-tick--gap-default:has(+ .habit-tick--ticked):after {
 	display: inline-block;
 	content: '';
@@ -416,24 +422,25 @@ div:has(.block-language-habittracker),
 }
 
 @keyframes fadeRipple {
-		0% {
-				transform: scale(0.5);
-				-webkit-transform: scale(0.5);
-				opacity: 1;
-		}
-		100% {
-				transform: scale(2.0);
-				-webkit-transform: scale(2.0);
-				opacity: 0;
-		}
+	0% {
+		transform: scale(0.5);
+		-webkit-transform: scale(0.5);
+		opacity: 1;
+	}
+
+	100% {
+		transform: scale(2.0);
+		-webkit-transform: scale(2.0);
+		opacity: 0;
+	}
 }
 
 .ot21-tap {
 	position: absolute;
-	opacity:0;
-  transition : all .1s;
-  -wekit-transition : all .1s;
-  -moz-transition : all .1s;
+	opacity: 0;
+	transition: all .1s;
+	-wekit-transition: all .1s;
+	-moz-transition: all .1s;
 	width: 60px;
 	height: 60px;
 	border-radius: 50%;
