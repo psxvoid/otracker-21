@@ -10,6 +10,7 @@ const computeFmOrder = (habit: HabitData, newOrder: number) => habit.firstPassOr
 
 export class DragAndDropController {
 	private readonly dragHabit: HabitData
+	private readonly habitsBeforeDrag?: readonly HabitData[]
 	private readonly dragContainerOffsetY: number
 	private readonly dragHabitIndexBeforeDrag: number = -1
 
@@ -39,7 +40,7 @@ export class DragAndDropController {
 		this.dragHabitIndex = dragIndex
 		this.dragHoverHabitIndex = dragIndex
 		this.dragContainerOffsetY = dragContainerOffsetY
-
+		this.habitsBeforeDrag = getHabits()
 	}
 
 	public get dragIndex(): number {
@@ -62,6 +63,10 @@ export class DragAndDropController {
 		return this.dragDoubleClientY ?? 0
 	}
 
+	public get containerOffsetY(): number {
+		return this.dragContainerOffsetY
+	}
+
 	public get habit(): HabitData {
 		return this.dragHabit
 	}
@@ -82,12 +87,16 @@ export class DragAndDropController {
 		return habits
 	}
 
+	rollbackHabits(): readonly HabitData[] {
+		return this.habitsBeforeDrag ?? []
+	}
+
 	updateDragDoubleTop = (clientY: number) => {
-		if (clientY === 0) {
+		if (Number.isNaN(clientY)) {
 			return
 		}
 
-		this.dragDoubleClientY = clientY + this.dragContainerOffsetY
+		this.dragDoubleClientY = clientY - this.dragContainerOffsetY
 		this.onUpdateCallback()
 	}
 	
