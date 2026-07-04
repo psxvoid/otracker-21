@@ -6,7 +6,7 @@
 	import {getDayOfTheWeek} from './utils'
 	import { DebugLog } from './utils/debugHelpers'
 	import { differenceInCalendarDays, parseISO, format } from 'date-fns'
-	import { EntryType, HabitEntry, HabitEntryUtils, HabitEntryWithCounter, parseEntry, serializeEntry } from './core/HabitEntry'
+	import { compact, EntryType, HabitEntry, HabitEntryUtils, HabitEntryWithCounter, parseEntry, serializeEntry, unpack } from './core/HabitEntry'
 	import { DateUtils } from './utils/DateUtils'
 	import { ClickMode, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings } from './settings'
 	import { longclick } from './utils/svelte/longclick'
@@ -283,7 +283,7 @@
 		if (entriesParsed != null) {
 			entries = entriesParsed
 		} else if (isTFile(file)) {
-			entries = await parseEntries(file)
+			entries = Array.from(unpack(await parseEntries(file)))
 		}
 
 		if (isTFile(file) && !StringUtils.isNullOrWhiteSpace(frontmatter.title) && frontmatter.title !== habitName) {
@@ -359,7 +359,7 @@
 
 		savingChanges = true
 
-		const entriesSerialized = entries.map(x => serializeEntry(x))
+		const entriesSerialized = compact(entries).map(x => serializeEntry(x))
 
 		this.app.fileManager.processFrontMatter(file, (frontmatter) => {
 			frontmatter['entries'] = entriesSerialized
