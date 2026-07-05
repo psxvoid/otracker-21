@@ -27,6 +27,8 @@
 	import { DragAndDropController } from './DragAndDropController'
 	import { TouchHoverIndexFromDataset } from './utils/TouchHoverIndexFromDataset'
 	import { LongClickEvent, longclick } from './utils/svelte/longclick'
+	import { setMinHabitNameWidthPx } from './settings'
+	import { isRTL, queryDirElement } from './utils/ObsidianHelpers'
 
 	// TypeScript interfaces for better state management
 	interface HabitTrackerSettings {
@@ -35,8 +37,9 @@
 		lastDisplayedDate: string
 		daysToShow: number
 		debug: boolean
-		matchLineLength: boolean,
+		matchLineLength: boolean
 		habitOrderField: string
+		minHabitNameWidthPx: number
 	}
 
 
@@ -84,6 +87,7 @@
 		openDailyNoteOnClick: boolean
 		gapStyle: string
 		habitOrderField: string
+		minHabitNameWidthPx: number
 	}
 	export let userSettings: Partial<{
 		path: string
@@ -97,6 +101,9 @@
 		gapStyle: string
 		habitOrderField: string
 	}>
+
+	let resizeObserver: ResizeObserver | undefined
+	let mutationObserver: MutationObserver | undefined
 
 	const createMockController = () => ({
 		destroyDragController: function() {},
@@ -162,6 +169,7 @@
 		debug: globalSettings.debug,
 		matchLineLength: globalSettings.matchLineLength,
 		habitOrderField: globalSettings.habitOrderField,
+		minHabitNameWidthPx: globalSettings.minHabitNameWidthPx,
 	})
 
 	// Initialize unified state
@@ -216,7 +224,8 @@
 				userSettings.debug !== undefined
 					? userSettings.debug
 					: state.settings.debug,
-			habitOrderField: userSettings?.habitOrderField ?? globalSettings?.habitOrderField
+			habitOrderField: userSettings?.habitOrderField ?? globalSettings?.habitOrderField,
+			minHabitNameWidthPx: globalSettings?.minHabitNameWidthPx
 		}
 
 		// Apply smart firstDisplayedDate logic
@@ -271,6 +280,7 @@
 			const count = state.computed.habits.length
 			logger.debugLog(() => `Found ${count} ${pluralize(count, 'habit')} at "${state.settings.path}" ↴`)
 			logger.debugLog(() => state.computed.habits)
+			setTimeout(() => setMinHabitNameWidthPx(resolvedSettings.minHabitNameWidthPx), 0)
 		} else {
 			// TODO add a button so they can create a habit
 			state.ui.fatalError = `No habits found at "${state.settings.path}"`
@@ -306,14 +316,45 @@
 			return
 		}
 
-		const parent = state.ui.rootElement.parentElement
-		if (!parent) {
-			logger.debugLog(() => `scrollToEnd: parentElement is null, cannot scroll`)
+		const target = document.querySelector('div.habit-tracker')
+
+		if (!(target instanceof HTMLElement)) {
+			logger.debugLog(() => "The scroll target is not HTML Element, cannot scroll.")
 			return
 		}
 
-		parent.scrollLeft = 99999999
-		logger.debugLog(() => `scrollToEnd completed`)
+		const scroll = () => {
+			const scrollLeft = 99999999 * (isRTL(app.vault) ? -1 : 1)
+			requestAnimationFrame(() => {
+				target.scrollLeft = scrollLeft
+			})
+			logger.debugLog(() => `scrollToEnd requested.`)
+		}
+
+		if (resizeObserver == null) {
+			resizeObserver = new ResizeObserver(scroll)
+			resizeObserver.observe(target)
+		};
+
+		if (mutationObserver == null) {
+			const dirElement = queryDirElement()
+
+			if (dirElement == null) {
+				logger.debugLog(() => `Unable to query the dir element.`)
+				return
+			}
+
+			mutationObserver = new MutationObserver(() => {
+				scroll()
+			});
+
+			mutationObserver.observe(dirElement, {
+				attributes: true,
+				attributeFilter: ['dir']
+			});
+		}
+
+		scroll()
 	}
 
 	const validateEssentials = async function (
@@ -637,8 +678,11 @@
 		logger.debugLog(() => 'Component mounted, setting up refresh listener')
 		refreshEventListener = (event: CustomEvent) => {
 			logger.debugLog(() => 'Refresh event received:')
+
 			// Update global settings and reset state to use new defaults
 			globalSettings = event.detail.settings
+
+			setMinHabitNameWidthPx(globalSettings.minHabitNameWidthPx)
 
 			// Reset state with new global settings as defaults
 			state.settings = createDefaultSettings()

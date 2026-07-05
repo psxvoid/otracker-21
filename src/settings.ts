@@ -3,6 +3,25 @@ export const enum ClickMode {
 	ClickToggleTick = 'tick-toggle'
 }
 
+export function setMinHabitNameWidthPx(widthPx: number): void {
+	const queryTarget = () => document.querySelector('.block-language-habittracker') as HTMLElement
+
+	const waitForTarget = () => {
+		const target = queryTarget()
+
+		if (target == null) {
+			setTimeout(waitForTarget, 150)
+			return
+		}
+
+		target.style.setProperty(
+			'--habit-name-min-width',
+			`${widthPx}px`);
+	}
+
+	waitForTarget()
+}
+
 export interface HabitTrackerSettings {
 	path: string;
 	daysToShow: number;
@@ -16,6 +35,7 @@ export interface HabitTrackerSettings {
 	useDailyNoteDate: boolean;
 	clickMode: ClickMode;
 	habitOrderField: string;
+	minHabitNameWidthPx: number;
 }
 
 export interface HabitTrackerUserSettings extends Omit<HabitTrackerSettings, 'defaultColor' | 'clickMode' | 'updateCheckEnabled'> {
@@ -39,6 +59,7 @@ export const DEFAULT_SETTINGS: HabitTrackerSettings = {
 	useDailyNoteDate: true,
 	clickMode: ClickMode.ClickIncreasesTickCount,
 	habitOrderField: 'habitOrder',
+	minHabitNameWidthPx: 125,
 }
 
 export function mergeSettings(globalSettings: HabitTrackerSettings, userSettings: Partial<HabitTrackerUserSettings>): HabitTrackerMergedSettings {

@@ -2,12 +2,13 @@
 	import {onMount, onDestroy} from 'svelte'
 	import HabitTracker from './HabitTracker.svelte'
 	import { DebugLog } from './utils/debugHelpers'
+	import { HabitTrackerSettings, setMinHabitNameWidthPx } from './settings'
 
 	export let error
 	export let src
 	export let pluginName
 	export let app
-	export let globalSettings
+	export let globalSettings : HabitTrackerSettings
 
 	let prettyError = ''
 	let componentContainer: HTMLElement
@@ -121,6 +122,7 @@
 		refreshEventListener = (event: CustomEvent) => {
 			logger.debugLog(() => 'Refresh event received, attempting recovery');
 			globalSettings = event.detail.settings;
+			setMinHabitNameWidthPx(globalSettings.minHabitNameWidthPx)
 			attemptRecovery(globalSettings);
 		};
 
