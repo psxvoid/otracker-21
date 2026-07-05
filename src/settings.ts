@@ -59,7 +59,7 @@ export const DEFAULT_SETTINGS: HabitTrackerSettings = {
 	useDailyNoteDate: true,
 	clickMode: ClickMode.ClickIncreasesTickCount,
 	habitOrderField: 'habitOrder',
-	minHabitNameWidthPx: 120,
+	minHabitNameWidthPx: 125,
 }
 
 export function mergeSettings(globalSettings: HabitTrackerSettings, userSettings: Partial<HabitTrackerUserSettings>): HabitTrackerMergedSettings {

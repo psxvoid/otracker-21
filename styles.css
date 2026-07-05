@@ -30,7 +30,7 @@ div:has(.block-language-habittracker),
 	--habit-cell-width: 25px;
 	--habit-cell-height: 32px;
 	--habit-name-max-width: 173px;
-	--habit-name-min-width: 80px; /* Set an arbitrary minimum limit for name cell width. The value can be changed, but it is necessary*/
+	--habit-name-min-width: 125px; /* Set an arbitrary minimum limit for name cell width. The value can be changed, but it is necessary*/
 	--habit-name-padding: 8px;
 
 	/* Tick size */

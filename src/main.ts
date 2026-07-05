@@ -198,6 +198,8 @@ export default class HabitTracker21 extends Plugin {
 		this.logger.debugLog(() => 'Saving settings...');
 		await this.saveData(this.settings);
 
+		setMinHabitNameWidthPx(this.settings.minHabitNameWidthPx)
+
 		// Refresh all habit tracker instances when settings change
 		this.refreshAllHabitTrackers();
 	}

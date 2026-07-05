@@ -280,6 +280,7 @@
 			const count = state.computed.habits.length
 			logger.debugLog(() => `Found ${count} ${pluralize(count, 'habit')} at "${state.settings.path}" ↴`)
 			logger.debugLog(() => state.computed.habits)
+			setTimeout(() => setMinHabitNameWidthPx(resolvedSettings.minHabitNameWidthPx), 0)
 		} else {
 			// TODO add a button so they can create a habit
 			state.ui.fatalError = `No habits found at "${state.settings.path}"`
