@@ -27,6 +27,7 @@
 	import { DragAndDropController } from './DragAndDropController'
 	import { TouchHoverIndexFromDataset } from './utils/TouchHoverIndexFromDataset'
 	import { LongClickEvent, longclick } from './utils/svelte/longclick'
+	import { setMinHabitNameWidthPx } from './settings'
 
 	// TypeScript interfaces for better state management
 	interface HabitTrackerSettings {
@@ -35,8 +36,9 @@
 		lastDisplayedDate: string
 		daysToShow: number
 		debug: boolean
-		matchLineLength: boolean,
+		matchLineLength: boolean
 		habitOrderField: string
+		minHabitNameWidthPx: number
 	}
 
 
@@ -84,6 +86,7 @@
 		openDailyNoteOnClick: boolean
 		gapStyle: string
 		habitOrderField: string
+		minHabitNameWidthPx: number
 	}
 	export let userSettings: Partial<{
 		path: string
@@ -162,6 +165,7 @@
 		debug: globalSettings.debug,
 		matchLineLength: globalSettings.matchLineLength,
 		habitOrderField: globalSettings.habitOrderField,
+		minHabitNameWidthPx: globalSettings.minHabitNameWidthPx,
 	})
 
 	// Initialize unified state
@@ -216,7 +220,8 @@
 				userSettings.debug !== undefined
 					? userSettings.debug
 					: state.settings.debug,
-			habitOrderField: userSettings?.habitOrderField ?? globalSettings?.habitOrderField
+			habitOrderField: userSettings?.habitOrderField ?? globalSettings?.habitOrderField,
+			minHabitNameWidthPx: globalSettings?.minHabitNameWidthPx
 		}
 
 		// Apply smart firstDisplayedDate logic
@@ -637,8 +642,11 @@
 		logger.debugLog(() => 'Component mounted, setting up refresh listener')
 		refreshEventListener = (event: CustomEvent) => {
 			logger.debugLog(() => 'Refresh event received:')
+
 			// Update global settings and reset state to use new defaults
 			globalSettings = event.detail.settings
+
+			setMinHabitNameWidthPx(globalSettings.minHabitNameWidthPx)
 
 			// Reset state with new global settings as defaults
 			state.settings = createDefaultSettings()

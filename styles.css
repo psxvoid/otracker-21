@@ -285,8 +285,6 @@ body:not(.is-readable-line-width) .block-language-habittracker:has(.habit-tracke
 	position: sticky;
 	left: 0;
 	background-color: var(--habit-highlight-names);
-
-
 }
 
 /* TODO: fix z-index higher than in tooltip */

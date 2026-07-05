@@ -1,15 +1,15 @@
 // TODO Add integration tests with jest
-import {Plugin, setIcon, App, PluginSettingTab, Setting, MarkdownRenderChild} from 'obsidian'
+import { Plugin, setIcon, App, PluginSettingTab, Setting, MarkdownRenderChild } from 'obsidian'
 import HabitTracker from './HabitTracker.svelte'
 import HabitTrackerError from './HabitTrackerError.svelte'
 import { getDateAsString, isValidCSSColor } from './utils'
 import { DebugLog } from './utils/debugHelpers'
 
-	import {
-		format,
-		parse,
-	} from 'date-fns'
-import { ClickMode, DEFAULT_SETTINGS, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings } from './settings'
+import {
+	format,
+	parse,
+} from 'date-fns'
+import { ClickMode, DEFAULT_SETTINGS, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings, setMinHabitNameWidthPx } from './settings'
 import { StringUtils } from './utils/StringUtils'
 
 type Destroyable = { $destroy: () => void }
@@ -140,6 +140,7 @@ export default class HabitTracker21 extends Plugin {
 				userSettings = JSON.parse(src);
 
 				const mergedSettings = mergeSettings(this.settings, userSettings)
+				setMinHabitNameWidthPx(mergedSettings.minHabitNameWidthPx)
 
 				const dailyNoteDateParseResult = parseDailyNoteDate(mergedSettings)
 				const today = dailyNoteDateParseResult.parsed ? dailyNoteDateParseResult.date : new Date();
@@ -148,20 +149,20 @@ export default class HabitTracker21 extends Plugin {
 				this.logger.debugLog(() => `Tracker settings: ${JSON.stringify(userSettings)}`);
 				this.logger.debugLog(() => `Today is ${format(today, 'yyyy-MM-dd')}`);
 				ctx.addChild(new SvelteMarkdownRenderChild(el, (target) => new HabitTracker({
-						target,
-						props: {
-							app: this.app,
-							userSettings,
-							globalSettings: {
-								...this.settings,
-								...(dailyNoteDateParseResult.parsed
-									? { lastDisplayedDate: getDateAsString(today) }
-									: { })
-								},
-							pluginName: this.manifest.name,
-						}
-					})))
-			} catch(error) {
+					target,
+					props: {
+						app: this.app,
+						userSettings,
+						globalSettings: {
+							...this.settings,
+							...(dailyNoteDateParseResult.parsed
+								? { lastDisplayedDate: getDateAsString(today) }
+								: {})
+						},
+						pluginName: this.manifest.name,
+					}
+				})))
+			} catch (error) {
 				ctx.addChild(new SvelteMarkdownRenderChild(el, (target) => new HabitTrackerError({
 					target,
 					props: {
@@ -190,12 +191,13 @@ export default class HabitTracker21 extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		setMinHabitNameWidthPx(this.settings.minHabitNameWidthPx)
 	}
 
 	async saveSettings() {
 		this.logger.debugLog(() => 'Saving settings...');
 		await this.saveData(this.settings);
-		
+
 		// Refresh all habit tracker instances when settings change
 		this.refreshAllHabitTrackers();
 	}
@@ -221,7 +223,7 @@ export default class HabitTracker21 extends Plugin {
 			if (codeBlock && !codeBlock.querySelector('.ht21-action-bar')) {
 				// Check for updates when creating new action bars
 				if (this.settings.updateCheckEnabled) {
-						this.checkForUpdatesBackground()
+					this.checkForUpdatesBackground()
 				}
 
 				const actionBar = this.createActionBar(codeBlock)
@@ -397,14 +399,14 @@ class HabitTrackerSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 
 		containerEl.empty();
 
-		containerEl.createEl('h3', {text: `${this.plugin.manifest.name} Settings`});
+		containerEl.createEl('h3', { text: `${this.plugin.manifest.name} Settings` });
 
 		// General Settings Section
-		let generalHeader = containerEl.createEl('h4', {text: 'General Settings'});
+		let generalHeader = containerEl.createEl('h4', { text: 'General Settings' });
 		generalHeader.style.marginBottom = '0';
 		const generalDesc = containerEl.createEl('div', {
 			cls: 'setting-item-description',
@@ -552,8 +554,29 @@ class HabitTrackerSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
+		type MinNameWidthSetting =  Setting & { setDescMinNameWidth: (widthPx: number) => Setting }
+		const minNameWidthSetting: MinNameWidthSetting = new Setting(containerEl) as MinNameWidthSetting;
+		minNameWidthSetting.setDescMinNameWidth = (widthPx: number) => {
+			minNameWidthSetting.setDesc(`Sets the minimum habit-name-cell width in pixels. Current value: ${widthPx} pixels.`)
+			return minNameWidthSetting
+		}
+		minNameWidthSetting
+			.setName('Min name width')
+			.setDescMinNameWidth(this.plugin.settings.minHabitNameWidthPx)
+			.addSlider(slider =>
+				slider
+					.setLimits(75, 300, 25)
+					.setValue(this.plugin.settings.minHabitNameWidthPx)
+					.onChange(async value => {
+						this.plugin.settings.minHabitNameWidthPx = value;
+						minNameWidthSetting.setDescMinNameWidth(value)
+						await this.plugin.saveSettings();
+					})
+			)
+
+
 		// Troubleshooting Section
-		const troubleshootingHeader = containerEl.createEl('h4', {text: 'Troubleshooting'});
+		const troubleshootingHeader = containerEl.createEl('h4', { text: 'Troubleshooting' });
 		troubleshootingHeader.style.marginTop = '30px';
 
 		new Setting(containerEl)
