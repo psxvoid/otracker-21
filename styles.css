@@ -251,7 +251,7 @@ body:not(.is-readable-line-width) .block-language-habittracker:has(.habit-tracke
 	box-sizing: border-box;
 	justify-content: start;
 	position: sticky;
-	left: 0;
+	inset-inline-start: 0;
 	z-index: 10;
 	background-color: var(--habit-highlight-names);
 	cursor: grab;
