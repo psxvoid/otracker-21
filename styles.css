@@ -319,21 +319,21 @@ div:has(.block-language-habittracker),
 }
 
 .habit-tick--streak-start {
-	padding-left: var(--habit-streak-padding);
+	padding-inline-start: var(--habit-streak-padding);
 }
 
 .habit-tick--streak-start .habit-tick__inner {
-	border-top-left-radius: var(--habit-streak-radius);
-	border-bottom-left-radius: var(--habit-streak-radius);
+	border-start-start-radius: var(--habit-streak-radius);
+	border-end-start-radius: var(--habit-streak-radius);
 }
 
 .habit-tick--streak-end {
-	padding-right: var(--habit-streak-padding);
+	padding-inline-end: var(--habit-streak-padding);
 }
 
 .habit-tick--streak-end .habit-tick__inner {
-	border-top-right-radius: var(--habit-streak-radius);
-	border-bottom-right-radius: var(--habit-streak-radius);
+	border-start-end-radius: var(--habit-streak-radius);
+	border-end-end-radius: var(--habit-streak-radius);
 }
 
 .habit-tick--streak+.habit-tick--streak-end .habit-tick__inner,
