@@ -28,6 +28,7 @@
 	import { TouchHoverIndexFromDataset } from './utils/TouchHoverIndexFromDataset'
 	import { LongClickEvent, longclick } from './utils/svelte/longclick'
 	import { setMinHabitNameWidthPx } from './settings'
+	import { isRTL } from './utils/ObsidianHelpers'
 
 	// TypeScript interfaces for better state management
 	interface HabitTrackerSettings {
@@ -100,6 +101,8 @@
 		gapStyle: string
 		habitOrderField: string
 	}>
+
+	let resizeObserver: ResizeObserver | undefined
 
 	const createMockController = () => ({
 		destroyDragController: function() {},
@@ -311,14 +314,25 @@
 			return
 		}
 
-		const parent = state.ui.rootElement.parentElement
-		if (!parent) {
-			logger.debugLog(() => `scrollToEnd: parentElement is null, cannot scroll`)
+		const scrollLeft = 99999999 * (isRTL(app.vault) ? -1 : 1)
+		const target = document.querySelector('div.habit-tracker')
+
+		if (!(target instanceof HTMLElement)) {
+			logger.debugLog(() => "The scroll target is not HTML Element, cannot scroll.")
 			return
 		}
 
-		parent.scrollLeft = 99999999
-		logger.debugLog(() => `scrollToEnd completed`)
+		const scroll = () => {
+			target.scrollLeft = scrollLeft
+			logger.debugLog(() => `scrollToEnd completed`)
+		}
+
+		if (resizeObserver == null) {
+			resizeObserver = new ResizeObserver(scroll)
+			resizeObserver.observe(target)
+		};
+
+		scroll()
 	}
 
 	const validateEssentials = async function (
