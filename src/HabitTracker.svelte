@@ -314,7 +314,6 @@
 			return
 		}
 
-		const scrollLeft = 99999999 * (isRTL(app.vault) ? -1 : 1)
 		const target = document.querySelector('div.habit-tracker')
 
 		if (!(target instanceof HTMLElement)) {
@@ -323,8 +322,11 @@
 		}
 
 		const scroll = () => {
-			target.scrollLeft = scrollLeft
-			logger.debugLog(() => `scrollToEnd completed`)
+			const scrollLeft = 99999999 * (isRTL(app.vault) ? -1 : 1)
+			requestAnimationFrame(() => {
+				target.scrollLeft = scrollLeft
+			})
+			logger.debugLog(() => `scrollToEnd requested.`)
 		}
 
 		if (resizeObserver == null) {
