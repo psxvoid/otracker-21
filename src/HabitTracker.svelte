@@ -28,7 +28,7 @@
 	import { TouchHoverIndexFromDataset } from './utils/TouchHoverIndexFromDataset'
 	import { LongClickEvent, longclick } from './utils/svelte/longclick'
 	import { setMinHabitNameWidthPx } from './settings'
-	import { isRTL } from './utils/ObsidianHelpers'
+	import { isRTL, queryDirElement } from './utils/ObsidianHelpers'
 
 	// TypeScript interfaces for better state management
 	interface HabitTrackerSettings {
@@ -103,6 +103,7 @@
 	}>
 
 	let resizeObserver: ResizeObserver | undefined
+	let mutationObserver: MutationObserver | undefined
 
 	const createMockController = () => ({
 		destroyDragController: function() {},
@@ -333,6 +334,24 @@
 			resizeObserver = new ResizeObserver(scroll)
 			resizeObserver.observe(target)
 		};
+
+		if (mutationObserver == null) {
+			const dirElement = queryDirElement()
+
+			if (dirElement == null) {
+				logger.debugLog(() => `Unable to query the dir element.`)
+				return
+			}
+
+			mutationObserver = new MutationObserver(() => {
+				scroll()
+			});
+
+			mutationObserver.observe(dirElement, {
+				attributes: true,
+				attributeFilter: ['dir']
+			});
+		}
 
 		scroll()
 	}
