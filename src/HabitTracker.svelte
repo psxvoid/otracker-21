@@ -738,6 +738,10 @@
 		if (vaultDeleteRef) app.vault.offref(vaultDeleteRef)
 		if (vaultRenameRef) app.vault.offref(vaultRenameRef)
 		if (midnightTimer) clearTimeout(midnightTimer)
+		mutationObserver?.disconnect()
+	  resizeObserver?.disconnect()
+		mutationObserver = undefined
+		resizeObserver = undefined
 	})
 
 	init(userSettings)
