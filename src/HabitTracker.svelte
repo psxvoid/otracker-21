@@ -5,7 +5,7 @@
 		getDailyNote,
 		getAllDailyNotes,
 	} from 'obsidian-daily-notes-interface'
-	import {onMount, onDestroy} from 'svelte'
+	import {onMount, onDestroy, tick} from 'svelte'
 
 	import Habit from './Habit.svelte'
 
@@ -27,20 +27,11 @@
 	import { DragAndDropController } from './DragAndDropController'
 	import { TouchHoverIndexFromDataset } from './utils/TouchHoverIndexFromDataset'
 	import { LongClickEvent, longclick } from './utils/svelte/longclick'
-	import { setMinHabitNameWidthPx } from './settings'
+	import { DEFAULT_SETTINGS, HabitTrackerMergedSettings, HabitTrackerSettings, HabitTrackerUserSettingsSnapshot, setMinHabitNameWidthPx, SnapshotMode } from './settings'
 	import { isRTL, queryDirElement } from './utils/ObsidianHelpers'
-
-	// TypeScript interfaces for better state management
-	interface HabitTrackerSettings {
-		path: string
-		firstDisplayedDate: string
-		lastDisplayedDate: string
-		daysToShow: number
-		debug: boolean
-		matchLineLength: boolean
-		habitOrderField: string
-		minHabitNameWidthPx: number
-	}
+	import { LocalFullCodeBlockSnapshotJson, Snapshot, SnapshotType } from './core/Snapshot'
+	import { getHabits, lazyLoadSnapshot } from './HabitLoader'
+	import { OTrackerPlugin } from './plugin'
 
 
 	interface ComputedState {
@@ -51,7 +42,6 @@
 	interface UIState {
 		fatalError: string
 		rootElement: HTMLElement | null
-		habitSource: TFile | TFolder | null
 	}
 
 	interface DragAndDropState {
@@ -75,35 +65,42 @@
 
 	export let app: Plugin['app']
 	export let pluginName: string
-	export let globalSettings: {
-		path: string
-		firstDisplayedDate: string
-		lastDisplayedDate: string
-		daysToShow: number
-		debug: boolean
-		matchLineLength: boolean
-		defaultColor: string
-		showStreaks: boolean
-		openDailyNoteOnClick: boolean
-		gapStyle: string
-		habitOrderField: string
-		minHabitNameWidthPx: number
+	export let globalSettings: HabitTrackerSettings
+	export let userSettings: HabitTrackerUserSettingsSnapshot
+	export let plugin: OTrackerPlugin
+
+	const logger = new DebugLog(() => state.settings, () => 'HabitTracker')
+	const getRowScopedEventLogger = (habit: HabitData, e: { type: string }) => {
+		return logger.scoped(() => 'row').scoped(() => getHabitName(habit)).scoped(() => e.type)
 	}
-	export let userSettings: Partial<{
-		path: string
-		firstDisplayedDate: string
-		lastDisplayedDate: Date
-		daysToShow: number
-		debug: boolean
-		matchLineLength: boolean
-		color: string
-		showStreaks: boolean
-		gapStyle: string
-		habitOrderField: string
-	}>
+
+	const getSnapshotType = () => {
+		const settings = plugin.getSettings()
+		return settings.snapshotMode === SnapshotMode.FullSnapshot
+			? SnapshotType.LocalFull
+			: SnapshotType.GlobalLight
+	}
+
+	const getGlobalSnapshot = () => {
+		const version = userSettings.snapshot.version
+		const snapshot = globalSettings.snapshots.find(x => x.version === version)
+
+		if (snapshot == null) {
+			logger.debugError(() => `Unable to find global snapshot version: ${version}.`)
+			throw new Error()
+		}
+
+		return snapshot
+	}
 
 	let resizeObserver: ResizeObserver | undefined
 	let mutationObserver: MutationObserver | undefined
+	let snapshot: Snapshot = userSettings.snapshot == null
+		?  new Snapshot(getSnapshotType()) // TODO: update snapshot type if changed after init but before save
+		: userSettings.snapshot.type === SnapshotType.LocalFull || (userSettings.snapshot != null && userSettings.snapshot.type == null) // null only supported in prior dev-versions
+		? Snapshot.parseLocal(userSettings.snapshot as LocalFullCodeBlockSnapshotJson, app)
+		: Snapshot.parseGlobalLight(getGlobalSnapshot(), app)
+	let lazySnapshot: Snapshot | undefined
 
 	const createMockController = () => ({
 		destroyDragController: function() {},
@@ -131,10 +128,6 @@
 	
 	const getTouchHoverIndex = (e: PointerEvent) => touchHoverIndexer.processPointerEvent(e)
 
-	const logger = new DebugLog(() => state.settings, () => 'HabitTracker')
-	const getRowScopedEventLogger = (habit: HabitData, e: { type: string }) => {
-		return logger.scoped(() => 'row').scoped(() => getHabitName(habit)).scoped(() => e.type)
-	}
 	const rowDebugEventWrapper = <E extends Event, U extends any[], R>(e: E, index: number, habit: HabitData, func: (e: E, index: number, habit: HabitData, ...funcArgs: U) => R, ...args: U): void=> {
 		const logger = getRowScopedEventLogger(habit, e)
 		let hasError: boolean = true
@@ -150,13 +143,6 @@
 		}
 	}
 
-	const parseHabitOrder = (habitOrder: undefined | number | null, min: number, max: number): number | undefined => {
-		if (habitOrder == null || typeof habitOrder !== 'number' || !Number.isInteger(habitOrder) || habitOrder < min || habitOrder > max) {
-			return
-		}
-
-		return habitOrder
-	}
 
 	// Default settings - use global settings as defaults
 	const createDefaultSettings = (): HabitTrackerSettings => ({
@@ -182,7 +168,6 @@
 		ui: {
 			fatalError: '',
 			rootElement: null,
-			habitSource: null,
 		},
 		dragAndDrop: {
 			isDragStarted: false,
@@ -225,7 +210,8 @@
 					? userSettings.debug
 					: state.settings.debug,
 			habitOrderField: userSettings?.habitOrderField ?? globalSettings?.habitOrderField,
-			minHabitNameWidthPx: globalSettings?.minHabitNameWidthPx
+			minHabitNameWidthPx: globalSettings?.minHabitNameWidthPx ?? DEFAULT_SETTINGS.snapshotMode,
+			snapshotMode: userSettings?.snapshotMode ?? globalSettings?.snapshotMode ?? DEFAULT_SETTINGS.snapshotMode,
 		}
 
 		// Apply smart firstDisplayedDate logic
@@ -274,13 +260,49 @@
 		logger.debugLog(() => `Will show habits for the following dates:`)
 		logger.debugLog(() => state.computed.dates)
 
-		// Load habits
-		state.computed.habits = getHabits(state.settings.path)
+		const habitSource = () => getHabitSource(state.settings.path)
+		state.computed.habits = snapshot.isParsed
+			? snapshot.habits
+			: await getHabits(
+					habitSource,
+					logger,
+					app,
+					// TODO: make this cast safe
+					resolvedSettings as unknown as HabitTrackerMergedSettings)
+
+		const compareSnapshots = async (logger: DebugLog) => {
+			if (!snapshot.isParsed) {
+				return
+			}
+
+			const updatedSnapshot = await lazyLoadSnapshot(habitSource, app,
+					resolvedSettings as unknown as HabitTrackerMergedSettings, logger.scoped(() => 'lazyLoadSnapshot'), snapshot.type)
+			
+			if (updatedSnapshot.hashCode != snapshot.hashCode) {
+				logger.debugLog(() => `Invalidating the snapshot:`)
+				logger.debugLog(() => `Snapshot before:`)
+				logger.debugLog(() => snapshot)
+				logger.debugLog(() => `Snapshot after:`)
+				logger.debugLog(() => updatedSnapshot)
+			} else {
+				logger.debugLog(() => 'Snapshots are equal.')
+			}
+
+			lazySnapshot = updatedSnapshot
+		}
+
+		if (snapshot != null || resolvedSettings.snapshotMode === SnapshotMode.FullSnapshot) {
+			tick().then(() => compareSnapshots(logger.scoped(() => 'compareSnapshots')))
+		}
+
+		logger.debugLog(() => `THe habit list is loaded from: ${snapshot.isParsed ? 'snapshot' : 'vault' }`)
+
 		if (state.computed.habits && state.computed.habits.length) {
 			const count = state.computed.habits.length
 			logger.debugLog(() => `Found ${count} ${pluralize(count, 'habit')} at "${state.settings.path}" ↴`)
 			logger.debugLog(() => state.computed.habits)
 			setTimeout(() => setMinHabitNameWidthPx(resolvedSettings.minHabitNameWidthPx), 0)
+			snapshot.setHabits(state.computed.habits)
 		} else {
 			// TODO add a button so they can create a habit
 			state.ui.fatalError = `No habits found at "${state.settings.path}"`
@@ -289,6 +311,41 @@
 		}
 
 		logger.debugLog(() => `Initialization completed successfully`)
+	}
+
+	const onInvalidateClick = async () => {
+		if (lazySnapshot == null) {
+			return
+		}
+
+		if (lazySnapshot.type === SnapshotType.LocalFull) {
+			await plugin.saveCodeBlockFunc({
+				...userSettings,
+				snapshot: lazySnapshot.toLocalFullJSON()
+			})
+			return
+		}
+
+		if (lazySnapshot.type === SnapshotType.GlobalLight) {
+			const { hashCode } = lazySnapshot
+			const { settingsJson, codeBlockJson } = lazySnapshot.toGlobalLightJSON()
+
+			await plugin.saveSettingsFunc((settings, options) => {
+				const existing = settings.snapshots.find(x => x.version === hashCode)
+
+				if (existing != null) {
+					options.skipSave = true
+					return
+				}
+
+				settings.snapshots.push(settingsJson)
+			})
+
+			await plugin.saveCodeBlockFunc({
+				...userSettings,
+				snapshot: codeBlockJson
+			})
+		}
 	}
 
 	const onLongClickStartDrag = async (event: LongClickEvent, index: number, habit: HabitData) => {
@@ -387,89 +444,19 @@
 		await app.workspace.getLeaf(false).openFile(note)
 	}
 
-	const getHabits = function (path: string): HabitData[] {
+	const getHabitSource = function (path: string): readonly TFile[] {
 		logger.debugLog(() => `Loading habits`)
-		state.ui.habitSource = app.vault.getAbstractFileByPath(path)
+		const habitSource = app.vault.getAbstractFileByPath(path)
+			?? app.vault.getAbstractFileByPath(`${path}.md`)
 
-		if (state.ui.habitSource && state.ui.habitSource instanceof TFolder) {
+		if (habitSource instanceof TFolder) {
 			// Filter to only include files, not subfolders
-			const allItems = state.ui.habitSource.children
-			const filesOnly = allItems.filter((item) => item instanceof TFile)
-			const count = filesOnly.length
-			logger.debugLog(
-				() =>
-					`"${path}" points to a folder with ${count} ${pluralize(count, 'file')} inside (ignoring subfolders)`,
-			)
-			let hasCustomOrder = false
-			const firstPassOrderMap = new Map<number, HabitData>()
-			const secondPassOrderMap = new Map<number, HabitData>()
-
-			// Sort files alphabetically by name
-			const sortedFiles = filesOnly
-				.sort((a, b) => a.basename.localeCompare(b.basename))
-				.map((file, index) => {
-					const fmCache = app.metadataCache.getFileCache(file)?.frontmatter ?? {}
-					const firstPassOrder = index + 1
-					const parsedSecondPassOrder = parseHabitOrder(fmCache[state.settings.habitOrderField], 1, filesOnly.length)
-					const secondPassOrder = parsedSecondPassOrder != null && secondPassOrderMap.has(parsedSecondPassOrder)
-						? undefined // prevent duplicate order items to interfere
-						: parsedSecondPassOrder
-					const title = fmCache['title']
-					
-					const habitData: HabitData = { file, title, firstPassOrder, secondPassOrder }
-
-					firstPassOrderMap.set(firstPassOrder, habitData)
-
-					if (secondPassOrder != null) {
-						hasCustomOrder = hasCustomOrder || secondPassOrder !== firstPassOrder
-						secondPassOrderMap.set(secondPassOrder, habitData)
-					}
-
-					return habitData
-				})
-
-			if (hasCustomOrder) {
-				const secondPassOrderHabits: HabitData[] = []
-				let indexIncrement = 0;
-
-				for (let i = 1; i <= sortedFiles.length; i++) {
-					const customOrderHabit = secondPassOrderMap.get(i)
-
-					if (customOrderHabit != null) {
-						secondPassOrderHabits.push(customOrderHabit)	
-						indexIncrement++
-					} else {
-						let firstPassHabit = firstPassOrderMap.get(i - indexIncrement)
-
-						while(firstPassHabit?.secondPassOrder != null) {
-							// skip already processed elements with custom order
-							indexIncrement--
-							firstPassHabit = firstPassOrderMap.get(i - indexIncrement)
-						}
-
-						if (firstPassHabit == null) {
-							throw new Error("Incorrectly computed habit order detected.")
-						}
-
-						secondPassOrderHabits.push(firstPassHabit)
-					}
-				}
-
-				return secondPassOrderHabits
-			}
-
-			return sortedFiles
+			return habitSource.children.filter(x => x instanceof TFile)
 		}
 
-		if (state.ui.habitSource && state.ui.habitSource instanceof TFile) {
-			logger.debugLog(() => `${path} points to a file`)
-			return [state.ui.habitSource as HabitData]
-		}
-
-		state.ui.habitSource = app.vault.getAbstractFileByPath(`${path}.md`)
-		if (state.ui.habitSource) {
-			logger.debugLog(() => `Adjusted ${path} to ${path}.md and found a file`)
-			return [state.ui.habitSource as HabitData]
+		if (habitSource instanceof TFile) {
+			logger.debugError(() => `${path} points to a file`)
+			return [habitSource]
 		}
 
 		logger.debugLog(() => `${path} is not found`)
@@ -770,7 +757,13 @@
 		bind:this={state.ui.rootElement}
 	>
 		<div class="habit-tracker__header habit-tracker__row">
-			<div class="habit-tracker__cell--name habit-tracker__cell"></div>
+			<div class="habit-tracker__cell--name habit-tracker__cell">
+				{#if snapshot.isParsed && lazySnapshot != null && lazySnapshot.hashCode !== snapshot.hashCode }
+					<!-- svelte-ignore a11y-click-events-have-key-events -->
+					<!-- svelte-ignore a11y-no-static-element-interactions -->
+					<span style="background:red" on:click={onInvalidateClick}>SNAPSHOT IS OUTDATED</span>
+				{/if}
+			</div>
 			{#each state.computed.dates as date}
 				<!-- svelte-ignore a11y-click-events-have-key-events -->
 				<!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -793,6 +786,8 @@
 				path={state.dragAndDrop.habit.file.path}
 				dates={state.computed.dates}
 				debug={state.settings.debug}
+				snapshot={snapshot}
+				plugin={plugin}
 				{app}
 				{pluginName}
 				{userSettings}
@@ -819,7 +814,8 @@
 				path={habit.file.path}
 				dates={state.computed.dates}
 				debug={state.settings.debug}
-				index={habit.secondPassOrder}
+				snapshot={snapshot}
+				plugin={plugin}
 				{app}
 				{pluginName}
 				{userSettings}

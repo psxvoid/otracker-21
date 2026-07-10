@@ -1,4 +1,5 @@
-import { DateUtils } from "../utils/DateUtils"
+import { HabitTrackerMergedSettings } from "src/settings"
+import { DateUtils, dayMs } from "../utils/DateUtils"
 import { StringUtils } from "../utils/StringUtils"
 
 export const enum EntryType {
@@ -253,7 +254,7 @@ export function unpack(entries: readonly HabitEntry[]): readonly HabitEntry[] {
 
         const result: HabitEntry[] = []
         for (let i = 0; i < range; i++) {
-            const dateUnpacked = new Date(firstDate + 86400000 * i)
+            const dateUnpacked = DateUtils.addDays(firstDate, i)
 
             const entryUnpacked: HabitEntryUnpacked = counter > 1
                 ? { type, date: dateUnpacked, counter } as HabitEntryWithCounter
@@ -264,4 +265,18 @@ export function unpack(entries: readonly HabitEntry[]): readonly HabitEntry[] {
 
         return result
     })
+}
+
+export function limitByViewRange(entries: readonly HabitEntry[], mergedSettings: HabitTrackerMergedSettings): readonly HabitEntry[] {
+	const { lastDisplayedDate } = mergedSettings
+
+	if (lastDisplayedDate == null || StringUtils.isNullOrWhiteSpace(lastDisplayedDate)) {
+		return entries
+	}
+
+	const lastDate = new Date(lastDisplayedDate)
+	const { daysToShow } = mergedSettings
+	const firstDisplayedDate = DateUtils.addDays(lastDate, -1 * daysToShow)
+
+	return entries.filter(x => x.date >= firstDisplayedDate && x.date <= lastDate)
 }

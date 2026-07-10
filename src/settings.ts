@@ -1,3 +1,5 @@
+import { CodeBlockJSON, GlobalLightSettingSnapshotJson, SnapshotJson } from "./core/Snapshot"
+
 export const enum ClickMode {
 	ClickIncreasesTickCount = 'tick-increment',
 	ClickToggleTick = 'tick-toggle'
@@ -22,24 +24,39 @@ export function setMinHabitNameWidthPx(widthPx: number): void {
 	waitForTarget()
 }
 
-export interface HabitTrackerSettings {
-	path: string;
-	daysToShow: number;
-	debug: boolean;
-	matchLineLength: boolean;
-	defaultColor: string;
-	showStreaks: boolean;
-	openDailyNoteOnClick: boolean;
-	gapStyle: string;
-	updateCheckEnabled: boolean;
-	useDailyNoteDate: boolean;
-	clickMode: ClickMode;
-	habitOrderField: string;
-	minHabitNameWidthPx: number;
+export const enum SnapshotMode {
+	Disabled = 'disabled',
+	FullSnapshot = 'full-snapshot',
+	GlobalLight = 'global-light',
 }
 
-export interface HabitTrackerUserSettings extends Omit<HabitTrackerSettings, 'defaultColor' | 'clickMode' | 'updateCheckEnabled'> {
+export interface HabitTrackerSettings {
+	path: string
+	daysToShow: number
+	debug: boolean
+	matchLineLength: boolean
+	defaultColor: string
+	showStreaks: boolean
+	openDailyNoteOnClick: boolean
+	gapStyle: string
+	updateCheckEnabled: boolean
+	useDailyNoteDate: boolean
+	clickMode: ClickMode
+	habitOrderField: string
+	minHabitNameWidthPx: number
+	snapshotMode: SnapshotMode
+	lastDisplayedDate?: string,
+	snapshots: GlobalLightSettingSnapshotJson[]
+}
+
+export interface HabitTrackerUserSettings extends Omit<
+	HabitTrackerSettings,
+	'defaultColor' | 'clickMode' | 'updateCheckEnabled' | 'snapshots'> {
 	color: string;
+}
+
+export interface HabitTrackerUserSettingsSnapshot extends HabitTrackerUserSettings {
+	snapshot: CodeBlockJSON
 }
 
 export interface HabitTrackerMergedSettings extends HabitTrackerUserSettings {
@@ -60,6 +77,8 @@ export const DEFAULT_SETTINGS: HabitTrackerSettings = {
 	clickMode: ClickMode.ClickIncreasesTickCount,
 	habitOrderField: 'habitOrder',
 	minHabitNameWidthPx: 125,
+	snapshotMode: SnapshotMode.Disabled,
+	snapshots: []
 }
 
 export function mergeSettings(globalSettings: HabitTrackerSettings, userSettings: Partial<HabitTrackerUserSettings>): HabitTrackerMergedSettings {
