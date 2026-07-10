@@ -24,7 +24,11 @@ All habit tracker views inside daily notes are limited by the date of that daily
 
 > This feature is still experimental and disabled by default in `Settings > Snapshot Mode`.
 
-Allows to automatically "freeze" habit tracker views in time. What it means is that if you open an older habit tracker view, than you'll see which habits where ticked at the moment that particular habit view was created/update even if you move/rename and/or delete a habit file (only in the full snapshot mode). In the original plugin if you open an older habit tracker view, then you'll see "current" habits (for today). When it's enable you might see "snapshot is outdated" message in the habit tracker view when you change the habit but a snapshot contains outdated habits data - you might click on this message, and it will automatically update the snapshot. You should know what you are doing before using this feature. Only works for views that are updated after this setting is enabled.
+Allows to automatically "freeze" habit tracker views in time. What it means is that if you open an older habit tracker view, than you'll see which habits where ticked at the moment that particular habit view was created/update even if you move/rename and/or delete a habit file (only in the full snapshot mode).
+
+In the original plugin if you open an older habit tracker view, then you'll see "current" habits (for today).
+
+When it's enabled, you might see "snapshot is outdated" message in the habit tracker view when you change the habit but a snapshot contains outdated habits data - you might click on this message, and it will automatically update the snapshot. You should know what you are doing before using this feature. Only works for views that are updated after this setting is enabled.
 
 Currently there are two snapshot modes that are supported.
 
