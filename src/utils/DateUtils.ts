@@ -1,3 +1,5 @@
+export const dayMs = 86400000
+
 export class DateUtils {
 	static defaultComparer(a: Date, b: Date): number {
 		return a.getTime() - b.getTime()
@@ -15,5 +17,13 @@ export class DateUtils {
 		const day = `${date.getDate()}`.padStart(2, '0')
 
 		return `${year}-${month}-${day}`
+	}
+
+	static addDays(date: Date | number, days: number): Date {
+		const dateNumber = typeof date === 'number'
+			? date
+			: Number(date)
+
+		return new Date(dateNumber + (days * dayMs))
 	}
 }

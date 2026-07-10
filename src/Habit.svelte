@@ -2,15 +2,18 @@
 	import { isValidCSSColor } from './utils'
 
 	import {onDestroy} from 'svelte'
-	import {parseYaml, TAbstractFile, TFile} from 'obsidian'
+	import { TFile } from 'obsidian'
 	import {getDayOfTheWeek} from './utils'
 	import { DebugLog } from './utils/debugHelpers'
 	import { differenceInCalendarDays, parseISO, format } from 'date-fns'
-	import { compact, EntryType, HabitEntry, HabitEntryUtils, HabitEntryWithCounter, parseEntry, serializeEntry, unpack } from './core/HabitEntry'
-	import { DateUtils } from './utils/DateUtils'
-	import { ClickMode, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings } from './settings'
+	import { compact, EntryType, HabitEntry, HabitEntryUtils, HabitEntryWithCounter, limitByViewRange, parseEntry, serializeEntry } from './core/HabitEntry'
+	import { DateUtils, dayMs } from './utils/DateUtils'
+	import { ClickMode, HabitTrackerMergedSettings, HabitTrackerSettings, HabitTrackerUserSettingsSnapshot, mergeSettings, SnapshotMode } from './settings'
 	import { longclick } from './utils/svelte/longclick'
 	import { StringUtils } from './utils/StringUtils'
+	import { Snapshot, SnapshotType } from './core/Snapshot'
+	import { parseEntries } from './HabitLoader'
+	import { OTrackerPlugin } from './plugin'
 
 	export let app
 	export let name
@@ -19,66 +22,21 @@
 	export let pluginName
 	export let userSettings: Partial<HabitTrackerSettings>
 	export let globalSettings: HabitTrackerSettings
+	export let snapshot: Snapshot
+	export let plugin: OTrackerPlugin
 	
-	let entries: HabitEntry[] = []
+	let entries: readonly HabitEntry[] = []
 	let frontmatter: { entries: readonly string[], color?: string, maxGap?: number, title?: string } = { entries: [] }
 	let habitName = name
 	let savingChanges = false // this helps the file change listner know if we made a change. if not, it reloads the data for the habit
 	let logger = new DebugLog(() => globalSettings, () => 'Habit')
 	let mergedSettings: HabitTrackerMergedSettings
-	const isTFile = (abstractFile: TAbstractFile | null): abstractFile is TFile => abstractFile != null && abstractFile instanceof TFile
 
 	const enum ClickAction {
 		TickIncrement,
 		Toggle
 	}
 
-	interface FrontmatterTyped {
-		entries: readonly string[],
-		title?: string
-	}
-
-	const getFrontmatter = async function (file: TAbstractFile | null): Promise<FrontmatterTyped> {
-
-		if (!isTFile(file)) {
-			logger.debugLog(() => `No file found for path: ${path}`)
-			return { entries: [] }
-		}
-
-		try {
-			const fmCached = app.metadataCache.getFileCache(file)?.frontmatter
-
-			if (fmCached != null) {
-				return fmCached
-			}
-
-			const fileContent = await app.vault.cachedRead(file)
-			const frontmatter = fileContent.split('---')[1]
-
-			if (!frontmatter) {
-				return { entries: [] }
-			}
-
-			const fmParsed = parseYaml(frontmatter)
-			if (fmParsed['entries'] == undefined) {
-				fmParsed['entries'] = []
-			}
-
-			return fmParsed
-		} catch (error) {
-			logger.debugLog(() => `Error in habit ${habitName}: error.message`)
-			return { entries: [] }
-		}
-	}
-
-	const parseEntries = async (file: TFile) => {
-			const frontmatter = await getFrontmatter(file)
-
-			logger.debugLog(() => `Frontmatter for ${path} ↴`)
-			logger.debugLog(() => frontmatter)
-
-			return frontmatter.entries.map(entryStr => parseEntry(entryStr)).sort(HabitEntryUtils.defaultComparer)
-	}
 
 	// Reactive color resolution - updates whenever frontmatter, userSettings, or globalSettings change
 	$: {
@@ -237,7 +195,7 @@
 			const today = format(new Date(), 'yyyy-MM-dd')
 			const lastEntry = entries[entries.length - 1]
 			const deadlineDate = format(
-				new Date(lastEntry.date.getTime() + (maxGap + 1) * 86400000),
+				new Date(lastEntry.date.getTime() + (maxGap + 1) * dayMs),
 				'yyyy-MM-dd',
 			)
 			if (deadlineDate >= today) {
@@ -278,21 +236,58 @@
 	const init = async function (entriesParsed?: HabitEntry[]) {
 		logger.debugLog(() => `Loading habit '${habitName}'`)
 
-		const file: TAbstractFile | null = app.vault.getAbstractFileByPath(path)
+		mergedSettings = mergeSettings(globalSettings, userSettings)
+
+		const file: TFile | null = app.vault.getFileByPath(path)
+			?? snapshot.isParsed
+			? snapshot.habits.find(x => x.file.path === path)?.file ?? null
+			: null
+
+		if (file == null) {
+			logger.debugLog(() => `Unable to find the file for the habit: ${habitName}`)
+			entries = []
+			return
+		}
 
 		if (entriesParsed != null) {
 			entries = entriesParsed
-		} else if (isTFile(file)) {
-			entries = Array.from(unpack(await parseEntries(file)))
+			if (!snapshot.isParsed && snapshot.type === SnapshotType.LocalFull) {
+				snapshot.setEntries(file, limitByViewRange(entries, mergedSettings))
+			}
+		} else if (snapshot.isParsed && snapshot.type === SnapshotType.LocalFull) { 
+			entries = snapshot.getEntriesForFile(file)
+		} else {
+			const { unpacked, limited } = await parseEntries(file, mergedSettings, app, logger.scoped(() => habitName).scoped(() => `parseEntries`))
+
+			// Review: limit entries by view, issue: when limited, frontmatter values are lost on save (patch range instead of replace?)
+			entries = unpacked 
+
+			if (!snapshot.isParsed && snapshot.type === SnapshotType.LocalFull) {
+				snapshot.setEntries(file, limited)
+			}
 		}
 
-		if (isTFile(file) && !StringUtils.isNullOrWhiteSpace(frontmatter.title) && frontmatter.title !== habitName) {
+		const getEntrySource = () => entriesParsed != null
+			? 'cache'
+			: snapshot.isParsed
+			? 'snapshot'
+			: 'vault' 
+
+		logger.debugLog(() => `The habit entries are loaded from: ${getEntrySource()}`)
+
+		if (!snapshot.isParsed && snapshot.type === SnapshotType.LocalFull) {
+			snapshot.setHabitTitle(file, habitName)
+		}
+
+		if (!StringUtils.isNullOrWhiteSpace(frontmatter.title) && frontmatter.title !== habitName) {
 			habitName = frontmatter.title
+			if (!snapshot.isParsed && snapshot.type === SnapshotType.LocalFull) {
+				snapshot.setHabitTitle(file, frontmatter.title)
+			}
 		}
 
 		logger.debugLog(() => `Habit "${habitName}": Found ${entries.length} entries`)
 		logger.debugLog(() => entries)
-		mergedSettings = mergeSettings(globalSettings, userSettings)
 	}
 
 	function getClickAction(params: { isShiftPressed: boolean, isLongClick: boolean }): ClickAction {
@@ -317,19 +312,26 @@
 		}
 	}
 
-	const toggleHabit = function (event: MouseEvent & KeyboardEvent, date: string, isLongClick: boolean) {
+	async function toggleHabit(event: MouseEvent & KeyboardEvent, date: string, isLongClick: boolean) {
 		event.stopPropagation()
-		const file = this.app.vault.getAbstractFileByPath(path)
+		const file = app.vault.getAbstractFileByPath(path)
 		if (!file || !(file instanceof TFile)) {
 			new Notice(`${pluginName}: file missing while trying to toggle habit`)
 			return
 		}
 
 		const parsedEntry: HabitEntry = parseEntry(date)
-		const existingEntry = entries.find(x => HabitEntryUtils.equal(x, parsedEntry))
+
+		// when local full snapshot is used it will contain limited entries
+		// load all entries to update the frontmatter
+		const allEntries = snapshot.isParsed && snapshot.type === SnapshotType.LocalFull
+			?	(await parseEntries(file, mergedSettings, app, logger.scoped(() => habitName).scoped(() => `parseEntries`))).unpacked
+			: entries
+
+		const existingEntry = allEntries.find(x => HabitEntryUtils.equal(x, parsedEntry))
 		logger.debugLog(() => `Existing entry was ${existingEntry == null ? 'not' : ''} found...`)
 
-		let newEntries: HabitEntry[] = [...entries]
+		let newEntries: HabitEntry[] = [...allEntries]
 
 		const clickAction = getClickAction({ isShiftPressed: event.shiftKey, isLongClick })
 
@@ -359,11 +361,46 @@
 
 		savingChanges = true
 
-		const entriesSerialized = compact(entries).map(x => serializeEntry(x))
+		const entriesSerialized = compact(newEntries).map(x => serializeEntry(x))
 
-		this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+		app.fileManager.processFrontMatter(file, (frontmatter) => {
 			frontmatter['entries'] = entriesSerialized
 		})
+
+		if (snapshot.type === SnapshotType.LocalFull) {
+			snapshot.setHabitTitle(habitName)
+			snapshot.setEntries(file, limitByViewRange(entries, mergedSettings))
+		}
+
+		const currentSnapshot: HabitTrackerUserSettingsSnapshot = userSettings as HabitTrackerUserSettingsSnapshot
+
+		if (snapshot.type === SnapshotType.LocalFull && (currentSnapshot?.snapshot == null || currentSnapshot.snapshot.version != snapshot.hashCode)) {
+			plugin.saveCodeBlockFunc({
+				...currentSnapshot,
+				snapshot: snapshot.toLocalFullJSON()
+			})
+			return
+		}
+		if (snapshot.type === SnapshotType.GlobalLight && (currentSnapshot?.snapshot == null || currentSnapshot.snapshot.version != snapshot.hashCode)) {
+			const json = snapshot.toGlobalLightJSON()
+			plugin.saveSettingsFunc((settings, options) => {
+				if (snapshot != null) {
+					const existingSnapshot = settings.snapshots.find(x => x.version === snapshot.hashCode)
+
+					if (existingSnapshot != null) {
+						options.skipSave = true	
+						return
+					}
+
+					settings.snapshots.push(json.settingsJson)
+				}
+			})
+			plugin.saveCodeBlockFunc({
+				...currentSnapshot,
+				snapshot: json.codeBlockJson
+			})
+			return
+		}
 	}
 
 	init()
@@ -409,7 +446,7 @@
 	const modifyRef = app.vault.on('modify', async (file,) => {
 		if (file.path === path) {
 			if (!savingChanges) {
-				const entriesParsed = await parseEntries(file)
+				const entriesParsed = await parseEntries(file, mergedSettings, app, logger)
 
 				let modified = false
 				if (entries.length !== entriesParsed.length) {

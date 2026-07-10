@@ -9,8 +9,9 @@ import {
 	format,
 	parse,
 } from 'date-fns'
-import { ClickMode, DEFAULT_SETTINGS, HabitTrackerMergedSettings, HabitTrackerSettings, mergeSettings, setMinHabitNameWidthPx } from './settings'
+import { ClickMode, DEFAULT_SETTINGS, HabitTrackerMergedSettings, HabitTrackerSettings, HabitTrackerUserSettingsSnapshot, mergeSettings, setMinHabitNameWidthPx, SnapshotMode } from './settings'
 import { StringUtils } from './utils/StringUtils'
+import { saveCodeBlock } from './utils/ObsidianCodeBlock'
 
 type Destroyable = { $destroy: () => void }
 
@@ -160,6 +161,23 @@ export default class HabitTracker21 extends Plugin {
 								: {})
 						},
 						pluginName: this.manifest.name,
+						plugin: {
+							getSettings: () => this.settings,
+							saveCodeBlockFunc: async (codeBlockData: HabitTrackerUserSettingsSnapshot): Promise<void> => {
+								await saveCodeBlock(this.app, ctx, codeBlockData)
+							},
+							saveSettingsFunc: async (setter: (settings: HabitTrackerSettings, options: { skipSave: boolean }) => void): Promise<void> => {
+								const options = { skipSave: false }
+
+								setter(this.settings, options)
+
+								if (options.skipSave) {
+									return
+								}
+
+								await this.saveSettings();
+							},
+						}
 					}
 				})))
 			} catch (error) {
@@ -553,6 +571,19 @@ class HabitTrackerSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.matchLineLength)
 				.onChange(async (value) => {
 					this.plugin.settings.matchLineLength = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Snapshot Mode')
+			.setDesc('Save snapshots of habits in the code block. It allows to restore a habit view even when original habit files are deleted, moved, etc (preservation).')
+			.addDropdown(dropdown => dropdown
+				.addOption('disabled', 'Disabled')
+				.addOption('full-snapshot', 'Full in Code Block')
+				.addOption('global-light', 'Global Light')
+				.setValue(this.plugin.settings.snapshotMode)
+				.onChange(async (value) => {
+					this.plugin.settings.snapshotMode = value as SnapshotMode;
 					await this.plugin.saveSettings();
 				}));
 
