@@ -13,6 +13,7 @@ import { ClickMode, DEFAULT_SETTINGS, HabitTrackerMergedSettings, HabitTrackerSe
 import { StringUtils } from './utils/StringUtils'
 import { saveCodeBlock } from './utils/ObsidianCodeBlock'
 import { VaultEventType } from './utils/ObsidianHelpers'
+import { getFrontmatter } from './HabitLoader'
 
 type Destroyable = { $destroy: () => void }
 
@@ -211,9 +212,9 @@ export default class HabitTracker21 extends Plugin {
 		const onRenameHandler = async (file: TAbstractFile, oldPath?: string) => {
 			if (typeof this.settings?.snapshots?.length === 'number' && file instanceof TFile) {
 				let hasSnapshotUpdates = false
-				const updatedSnapshots = this.settings.snapshots.map(x => {
+				const updatedSnapshots = await Promise.all(this.settings.snapshots.map(async x => {
 					let hasHabitUpdates = false
-					const habitsToUpdate = x.habits.map(habit => {
+					const habitsToUpdate = await Promise.all(x.habits.map(async habit => {
 						if (habit.path !== oldPath) {
 							return habit
 						}
@@ -221,14 +222,12 @@ export default class HabitTracker21 extends Plugin {
 						hasSnapshotUpdates = true
 						hasHabitUpdates = true
 
-						// TODO: also update title
-
 						return {
 							...habit,
 							basename: file.basename,
 							path: file.path,
 						}
-					})
+					}))
 
 					return !hasHabitUpdates
 						? x
@@ -236,7 +235,46 @@ export default class HabitTracker21 extends Plugin {
 							...x,
 							habits: habitsToUpdate
 						}
-				})
+				}))
+
+				if (hasSnapshotUpdates) {
+					this.settings.snapshots = updatedSnapshots
+					await this.saveSettings()
+				}
+			}
+		}
+		const onModifyHandler = async (file: TAbstractFile) => {
+			if (typeof this.settings?.snapshots?.length === 'number' && file instanceof TFile) {
+				let hasSnapshotUpdates = false
+				const updatedSnapshots = await Promise.all(this.settings.snapshots.map(async x => {
+					let hasHabitUpdates = false
+					const habitsToUpdate = await Promise.all(x.habits.map(async habit => {
+						if (habit.path !== file.path) {
+							return habit
+						}
+
+						hasSnapshotUpdates = true
+						hasHabitUpdates = true
+
+						const fm = await getFrontmatter(file, this.logger.scoped(() => 'getFrontmatter'), this.app, true, 1)
+
+						if (fm.title === habit.title) {
+							return habit
+						}
+
+						return {
+							...habit,
+							title: fm.title
+						}
+					}))
+
+					return !hasHabitUpdates
+						? x
+						: {
+							...x,
+							habits: habitsToUpdate
+						}
+				}))
 
 				if (hasSnapshotUpdates) {
 					this.settings.snapshots = updatedSnapshots
@@ -251,6 +289,7 @@ export default class HabitTracker21 extends Plugin {
 		}
 
 		subscribeToVaultEvents('rename', onRenameHandler)
+		subscribeToVaultEvents('modify', onModifyHandler)
 	}
 
 	async loadSettings() {
