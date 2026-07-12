@@ -1,5 +1,7 @@
 import { Vault } from "obsidian";
 
+export type VaultEventType = 'create' | 'rename' | 'delete' | 'modify' 
+
 export type VaultConfig = Vault & {
 	config: {
 		rightToLeft: boolean

@@ -1,5 +1,5 @@
 // TODO Add integration tests with jest
-import { Plugin, setIcon, App, PluginSettingTab, Setting, MarkdownRenderChild } from 'obsidian'
+import { Plugin, setIcon, App, PluginSettingTab, Setting, MarkdownRenderChild, EventRef, TFile, TAbstractFile, Vault } from 'obsidian'
 import HabitTracker from './HabitTracker.svelte'
 import HabitTrackerError from './HabitTrackerError.svelte'
 import { getDateAsString, isValidCSSColor } from './utils'
@@ -12,6 +12,7 @@ import {
 import { ClickMode, DEFAULT_SETTINGS, HabitTrackerMergedSettings, HabitTrackerSettings, HabitTrackerUserSettingsSnapshot, mergeSettings, setMinHabitNameWidthPx, SnapshotMode } from './settings'
 import { StringUtils } from './utils/StringUtils'
 import { saveCodeBlock } from './utils/ObsidianCodeBlock'
+import { VaultEventType } from './utils/ObsidianHelpers'
 
 type Destroyable = { $destroy: () => void }
 
@@ -102,6 +103,7 @@ const getCurrentDailyNoteDate = (app: App, sourcePath: string, logger: DebugLog)
 export default class HabitTracker21 extends Plugin {
 	settings: HabitTrackerSettings;
 	private logger: DebugLog = new DebugLog(() => this.settings, () => 'Plugin');
+	private disposeRefs: (() => void)[] = []
 
 	async onload() {
 		await this.loadSettings();
@@ -205,6 +207,50 @@ export default class HabitTracker21 extends Plugin {
 
 		// Add the settings tab
 		this.addSettingTab(new HabitTrackerSettingTab(this.app, this));
+
+		const onRenameHandler = async (file: TAbstractFile, oldPath?: string) => {
+			if (typeof this.settings?.snapshots?.length === 'number' && file instanceof TFile) {
+				let hasSnapshotUpdates = false
+				const updatedSnapshots = this.settings.snapshots.map(x => {
+					let hasHabitUpdates = false
+					const habitsToUpdate = x.habits.map(habit => {
+						if (habit.path !== oldPath) {
+							return habit
+						}
+
+						hasSnapshotUpdates = true
+						hasHabitUpdates = true
+
+						// TODO: also update title
+
+						return {
+							...habit,
+							basename: file.basename,
+							path: file.path,
+						}
+					})
+
+					return !hasHabitUpdates
+						? x
+						: {
+							...x,
+							habits: habitsToUpdate
+						}
+				})
+
+				if (hasSnapshotUpdates) {
+					this.settings.snapshots = updatedSnapshots
+					await this.saveSettings()
+				}
+			}
+		}
+
+		const subscribeToVaultEvents = (target: VaultEventType, handler: (file: TAbstractFile, oldPath?: string) => unknown) => {
+			const eventRef = this.app.vault.on(target as 'rename', handler)
+			return () => this.app.vault.offref(eventRef)
+		}
+
+		subscribeToVaultEvents('rename', onRenameHandler)
 	}
 
 	async loadSettings() {
@@ -406,6 +452,17 @@ export default class HabitTracker21 extends Plugin {
 	}
 
 	onunload() {
+		for(const dispose of this.disposeRefs) {
+			try {
+				dispose()
+			} catch(error: unknown) {
+				const errorMessage = error instanceof Error
+					? `${error.message}\nStack: ${error?.stack}`
+					: String(error)
+
+				this.logger.debugError(() => `Dispose error: ${errorMessage}`)
+			}
+		}
 		// window.location.reload();
 	}
 }
