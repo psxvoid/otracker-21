@@ -32,6 +32,7 @@
 	import { LocalFullCodeBlockSnapshotJson, Snapshot, SnapshotType } from './core/Snapshot'
 	import { getHabits, lazyLoadSnapshot } from './HabitLoader'
 	import { OTrackerPlugin } from './plugin'
+	import { indexOf } from './utils/ArrayUtils'
 
 
 	interface ComputedState {
@@ -46,7 +47,8 @@
 
 	interface DragAndDropState {
 		isDragStarted: boolean,
-		habit: HabitData
+		habit: HabitData,
+		isFrozen: boolean
 	}
 
 	interface HabitTrackerState {
@@ -95,11 +97,12 @@
 
 	let resizeObserver: ResizeObserver | undefined
 	let mutationObserver: MutationObserver | undefined
-	let snapshot: Snapshot = userSettings.snapshot == null
+	const createSnapshot = () => userSettings.snapshot == null
 		?  new Snapshot(getSnapshotType()) // TODO: update snapshot type if changed after init but before save
 		: userSettings.snapshot.type === SnapshotType.LocalFull || (userSettings.snapshot != null && userSettings.snapshot.type == null) // null only supported in prior dev-versions
 		? Snapshot.parseLocal(userSettings.snapshot as LocalFullCodeBlockSnapshotJson, app)
 		: Snapshot.parseGlobalLight(getGlobalSnapshot(), app)
+	let snapshot: Snapshot = createSnapshot()
 	let lazySnapshot: Snapshot | undefined
 
 	const createMockController = () => ({
@@ -113,8 +116,9 @@
 	const destroyDragController = () => {
 		dragController = createMockController()
 		state.dragAndDrop = {
+			...state.dragAndDrop,
 			isDragStarted: false,
-			dragDoubleTopOffset: -1,
+			habit: {} as HabitData,
 		}
 	}
 	const isDragStarted = () => dragController instanceof DragAndDropController
@@ -171,7 +175,8 @@
 		},
 		dragAndDrop: {
 			isDragStarted: false,
-			dragDoubleTopOffset: -1,
+			habit: {} as HabitData,
+			isFrozen: true
 		}
 	}
 
@@ -261,6 +266,7 @@
 		logger.debugLog(() => state.computed.dates)
 
 		const habitSource = () => getHabitSource(state.settings.path)
+		snapshot = createSnapshot()
 		state.computed.habits = snapshot.isParsed
 			? snapshot.habits
 			: await getHabits(
@@ -271,10 +277,6 @@
 					resolvedSettings as unknown as HabitTrackerMergedSettings)
 
 		const compareSnapshots = async (logger: DebugLog) => {
-			if (!snapshot.isParsed) {
-				return
-			}
-
 			const updatedSnapshot = await lazyLoadSnapshot(habitSource, app,
 					resolvedSettings as unknown as HabitTrackerMergedSettings, logger.scoped(() => 'lazyLoadSnapshot'), snapshot.type)
 			
@@ -285,14 +287,17 @@
 				logger.debugLog(() => `Snapshot after:`)
 				logger.debugLog(() => updatedSnapshot)
 			} else {
+				updateDragAndDropState({ isFrozen: false })
 				logger.debugLog(() => 'Snapshots are equal.')
 			}
 
 			lazySnapshot = updatedSnapshot
 		}
 
-		if (snapshot != null || resolvedSettings.snapshotMode === SnapshotMode.FullSnapshot) {
+		if (snapshot.isParsed) {
 			tick().then(() => compareSnapshots(logger.scoped(() => 'compareSnapshots')))
+		} else {
+			updateDragAndDropState({ isFrozen: false })
 		}
 
 		logger.debugLog(() => `THe habit list is loaded from: ${snapshot.isParsed ? 'snapshot' : 'vault' }`)
@@ -495,6 +500,11 @@
 			return
 		}
 
+		if (state.dragAndDrop.isFrozen) {
+			logger.debugLog(() => 'Drag and drop is disabled. Return.')
+			return
+		}
+
 		updateDragAndDropState({ isDragStarted: true, habit })
 
 		const dragContainerOffsetY = rootElement.getBoundingClientRect().top
@@ -561,7 +571,7 @@
 	}
 
 	const finishDragMockEvent = { type: 'finishDrag' }
-	const finishDrag = (options: { cancel: boolean }) => {
+	const finishDrag = async (options: { cancel: boolean }) => {
 		if (!isDragStarted()) return
 
 		const index = dragController.dragIndex
@@ -588,7 +598,25 @@
 					continue
 				}
 
-				app.fileManager.processFrontMatter(
+				if (snapshot.type === SnapshotType.GlobalLight) {
+					// update order of habits
+
+					snapshot.setHabits(state.computed.habits)
+
+					await plugin.saveSettingsFunc((settings) => {
+						const snapshotIndexToUpdate = indexOf(settings.snapshots, x => x.version === snapshot.hashCode)
+						
+						if (snapshotIndexToUpdate < 0) {
+							logger.debugError(() => `Unable to find existing snapshot version: ${snapshot.hashCode}.`)
+							return
+						}
+
+						settings.snapshots[snapshotIndexToUpdate] = snapshot.toGlobalLightJSON().settingsJson
+					})
+				}
+
+				// update frontmatter after global snapshot update to avoid loosing data due to component refresh
+				await app.fileManager.processFrontMatter(
 					habit.file,
 					(frontmatter) => {
 						const habitOrderField = state.settings.habitOrderField
@@ -761,7 +789,7 @@
 				{#if snapshot.isParsed && lazySnapshot != null && lazySnapshot.hashCode !== snapshot.hashCode }
 					<!-- svelte-ignore a11y-click-events-have-key-events -->
 					<!-- svelte-ignore a11y-no-static-element-interactions -->
-					<span style="background:red" on:click={onInvalidateClick}>SNAPSHOT IS OUTDATED</span>
+					<span style="background:red" on:click={onInvalidateClick}>SNAPSHOT VIEW</span>
 				{/if}
 			</div>
 			{#each state.computed.dates as date}

@@ -1,5 +1,5 @@
 // TODO Add integration tests with jest
-import { Plugin, setIcon, App, PluginSettingTab, Setting, MarkdownRenderChild } from 'obsidian'
+import { Plugin, setIcon, App, PluginSettingTab, Setting, MarkdownRenderChild, EventRef, TFile, TAbstractFile, Vault } from 'obsidian'
 import HabitTracker from './HabitTracker.svelte'
 import HabitTrackerError from './HabitTrackerError.svelte'
 import { getDateAsString, isValidCSSColor } from './utils'
@@ -12,6 +12,9 @@ import {
 import { ClickMode, DEFAULT_SETTINGS, HabitTrackerMergedSettings, HabitTrackerSettings, HabitTrackerUserSettingsSnapshot, mergeSettings, setMinHabitNameWidthPx, SnapshotMode } from './settings'
 import { StringUtils } from './utils/StringUtils'
 import { saveCodeBlock } from './utils/ObsidianCodeBlock'
+import { VaultEventType } from './utils/ObsidianHelpers'
+import { getFrontmatter } from './HabitLoader'
+import { HabitLightSnapshot } from './core/Snapshot'
 
 type Destroyable = { $destroy: () => void }
 
@@ -102,6 +105,7 @@ const getCurrentDailyNoteDate = (app: App, sourcePath: string, logger: DebugLog)
 export default class HabitTracker21 extends Plugin {
 	settings: HabitTrackerSettings;
 	private logger: DebugLog = new DebugLog(() => this.settings, () => 'Plugin');
+	private disposeRefs: (() => void)[] = []
 
 	async onload() {
 		await this.loadSettings();
@@ -205,6 +209,84 @@ export default class HabitTracker21 extends Plugin {
 
 		// Add the settings tab
 		this.addSettingTab(new HabitTrackerSettingTab(this.app, this));
+
+		const globalSnapshotBaseHandler = async (
+			file: TAbstractFile,
+			morph: (habit: HabitLightSnapshot, file: TFile) => Promise<HabitLightSnapshot>,
+			) => {
+			if (typeof this.settings?.snapshots?.length === 'number' && file instanceof TFile) {
+				let hasSnapshotUpdates = false
+				const updatedSnapshots = await Promise.all(this.settings.snapshots.map(async x => {
+					let hasHabitUpdates = false
+					const habitsToUpdate = await Promise.all(x.habits.map(async habit => {
+						const updatedHabit = await morph(habit, file)
+
+						if (updatedHabit !== habit) {
+							hasSnapshotUpdates = true
+							hasHabitUpdates = true
+
+							return updatedHabit
+						}
+
+						return habit
+					}))
+
+					return !hasHabitUpdates
+						? x
+						: {
+							...x,
+							habits: habitsToUpdate
+						}
+				}))
+
+				if (hasSnapshotUpdates) {
+					this.settings.snapshots = updatedSnapshots
+					await this.saveSettings()
+				}
+			}
+		}
+
+		const onRenameHandler = async (abstractFile: TAbstractFile, oldPath?: string) => globalSnapshotBaseHandler(
+			abstractFile,
+			async (habit, tFile) => habit.path !== oldPath
+				? habit
+				: {
+					...habit,
+					basename: tFile.basename,
+					path: tFile.path,
+				})
+
+		const onModifyHandler = async (abstractFile: TAbstractFile) => globalSnapshotBaseHandler(
+			abstractFile,
+			async (habit, file) => {
+				if (habit.path !== file.path) {
+					return habit
+				}
+
+				const fm = await getFrontmatter(file, this.logger.scoped(() => 'get-fm-on-mod'), this.app, true, 1)
+
+				let frontmatterChanges: Partial<HabitLightSnapshot> | undefined
+
+				if (fm.title !== habit.title) {
+					frontmatterChanges = frontmatterChanges ?? {}
+					frontmatterChanges.title = fm.title
+				}
+
+				return frontmatterChanges == null
+					? habit
+					: {
+						...habit,
+						...frontmatterChanges
+					}
+			})
+
+		const subscribeToVaultEvents = (target: VaultEventType, handler: (file: TAbstractFile, oldPath?: string) => unknown) => {
+			const eventRef = this.app.vault.on(target as 'rename', handler)
+			return () => this.app.vault.offref(eventRef)
+		}
+
+		subscribeToVaultEvents('rename', onRenameHandler)
+		subscribeToVaultEvents('modify', onModifyHandler)
 	}
 
 	async loadSettings() {
@@ -406,6 +488,17 @@ export default class HabitTracker21 extends Plugin {
 	}
 
 	onunload() {
+		for(const dispose of this.disposeRefs) {
+			try {
+				dispose()
+			} catch(error: unknown) {
+				const errorMessage = error instanceof Error
+					? `${error.message}\nStack: ${error?.stack}`
+					: String(error)
+
+				this.logger.debugError(() => `Dispose error: ${errorMessage}`)
+			}
+		}
 		// window.location.reload();
 	}
 }

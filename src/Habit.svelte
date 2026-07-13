@@ -233,7 +233,7 @@
 		return days
 	})()
 
-	const init = async function (entriesParsed?: HabitEntry[]) {
+	const init = async function (entriesParsed?: readonly HabitEntry[]) {
 		logger.debugLog(() => `Loading habit '${habitName}'`)
 
 		mergedSettings = mergeSettings(globalSettings, userSettings)
@@ -446,7 +446,7 @@
 	const modifyRef = app.vault.on('modify', async (file,) => {
 		if (file.path === path) {
 			if (!savingChanges) {
-				const entriesParsed = await parseEntries(file, mergedSettings, app, logger)
+				const entriesParsed = (await parseEntries(file, mergedSettings, app, logger)).unpacked
 
 				let modified = false
 				if (entries.length !== entriesParsed.length) {

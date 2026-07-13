@@ -104,7 +104,7 @@ function isFrontmatterTyped(cache: FrontMatterCache | null | undefined): cache i
 	return cache != null && cache.entries != null && Array.isArray(cache.entries)
 }
 
-async function getFrontmatter(file: TFile, logger: DebugLog, app: App, ignoreCache: boolean = false, throttleLevel: number = 0): Promise<FrontmatterTyped> {
+export async function getFrontmatter(file: TFile, logger: DebugLog, app: App, ignoreCache: boolean = false, throttleLevel: number = 0): Promise<FrontmatterTyped> {
 	try {
 		if (!ignoreCache) {
 			const fmCached = app.metadataCache.getFileCache(file)?.frontmatter

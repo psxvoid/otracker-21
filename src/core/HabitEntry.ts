@@ -1,6 +1,7 @@
 import { HabitTrackerMergedSettings } from "src/settings"
 import { DateUtils, dayMs } from "../utils/DateUtils"
 import { StringUtils } from "../utils/StringUtils"
+import { indexOf } from "src/utils/ArrayUtils"
 
 export const enum EntryType {
     Legacy,
@@ -182,8 +183,7 @@ export class HabitEntryUtils {
     }
 
     static indexOf(entries: readonly HabitEntry[], entryToFind: HabitEntry): number {
-        const entry = entries.find(x => HabitEntryUtils.equal(entryToFind, x))
-        return entry == null ? -1 : entries.indexOf(entry)
+			return indexOf(entries, x => HabitEntryUtils.equal(entryToFind, x))
     }
 }
 
