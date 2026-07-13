@@ -46,7 +46,8 @@
 
 	interface DragAndDropState {
 		isDragStarted: boolean,
-		habit: HabitData
+		habit: HabitData,
+		isFrozen: boolean
 	}
 
 	interface HabitTrackerState {
@@ -113,8 +114,9 @@
 	const destroyDragController = () => {
 		dragController = createMockController()
 		state.dragAndDrop = {
+			...state.dragAndDrop,
 			isDragStarted: false,
-			dragDoubleTopOffset: -1,
+			habit: {} as HabitData,
 		}
 	}
 	const isDragStarted = () => dragController instanceof DragAndDropController
@@ -171,7 +173,8 @@
 		},
 		dragAndDrop: {
 			isDragStarted: false,
-			dragDoubleTopOffset: -1,
+			habit: {} as HabitData,
+			isFrozen: true
 		}
 	}
 
@@ -271,10 +274,6 @@
 					resolvedSettings as unknown as HabitTrackerMergedSettings)
 
 		const compareSnapshots = async (logger: DebugLog) => {
-			if (!snapshot.isParsed) {
-				return
-			}
-
 			const updatedSnapshot = await lazyLoadSnapshot(habitSource, app,
 					resolvedSettings as unknown as HabitTrackerMergedSettings, logger.scoped(() => 'lazyLoadSnapshot'), snapshot.type)
 			
@@ -285,14 +284,17 @@
 				logger.debugLog(() => `Snapshot after:`)
 				logger.debugLog(() => updatedSnapshot)
 			} else {
+				updateDragAndDropState({ isFrozen: false })
 				logger.debugLog(() => 'Snapshots are equal.')
 			}
 
 			lazySnapshot = updatedSnapshot
 		}
 
-		if (snapshot != null || resolvedSettings.snapshotMode === SnapshotMode.FullSnapshot) {
+		if (snapshot.isParsed) {
 			tick().then(() => compareSnapshots(logger.scoped(() => 'compareSnapshots')))
+		} else {
+			updateDragAndDropState({ isFrozen: false })
 		}
 
 		logger.debugLog(() => `THe habit list is loaded from: ${snapshot.isParsed ? 'snapshot' : 'vault' }`)
@@ -492,6 +494,11 @@
 
 		if (rootElement == null) {
 			logger.debugLog(() => 'Unable to get drag container root element. Return.')
+			return
+		}
+
+		if (state.dragAndDrop.isFrozen) {
+			logger.debugLog(() => 'Drag and drop is disabled. Return.')
 			return
 		}
 
