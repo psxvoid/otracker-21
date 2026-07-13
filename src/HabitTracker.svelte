@@ -32,6 +32,7 @@
 	import { LocalFullCodeBlockSnapshotJson, Snapshot, SnapshotType } from './core/Snapshot'
 	import { getHabits, lazyLoadSnapshot } from './HabitLoader'
 	import { OTrackerPlugin } from './plugin'
+	import { indexOf } from './utils/ArrayUtils'
 
 
 	interface ComputedState {
@@ -96,11 +97,12 @@
 
 	let resizeObserver: ResizeObserver | undefined
 	let mutationObserver: MutationObserver | undefined
-	let snapshot: Snapshot = userSettings.snapshot == null
+	const createSnapshot = () => userSettings.snapshot == null
 		?  new Snapshot(getSnapshotType()) // TODO: update snapshot type if changed after init but before save
 		: userSettings.snapshot.type === SnapshotType.LocalFull || (userSettings.snapshot != null && userSettings.snapshot.type == null) // null only supported in prior dev-versions
 		? Snapshot.parseLocal(userSettings.snapshot as LocalFullCodeBlockSnapshotJson, app)
 		: Snapshot.parseGlobalLight(getGlobalSnapshot(), app)
+	let snapshot: Snapshot = createSnapshot()
 	let lazySnapshot: Snapshot | undefined
 
 	const createMockController = () => ({
@@ -264,6 +266,7 @@
 		logger.debugLog(() => state.computed.dates)
 
 		const habitSource = () => getHabitSource(state.settings.path)
+		snapshot = createSnapshot()
 		state.computed.habits = snapshot.isParsed
 			? snapshot.habits
 			: await getHabits(
@@ -568,7 +571,7 @@
 	}
 
 	const finishDragMockEvent = { type: 'finishDrag' }
-	const finishDrag = (options: { cancel: boolean }) => {
+	const finishDrag = async (options: { cancel: boolean }) => {
 		if (!isDragStarted()) return
 
 		const index = dragController.dragIndex
@@ -595,7 +598,25 @@
 					continue
 				}
 
-				app.fileManager.processFrontMatter(
+				if (snapshot.type === SnapshotType.GlobalLight) {
+					// update order of habits
+
+					snapshot.setHabits(state.computed.habits)
+
+					await plugin.saveSettingsFunc((settings) => {
+						const snapshotIndexToUpdate = indexOf(settings.snapshots, x => x.version === snapshot.hashCode)
+						
+						if (snapshotIndexToUpdate < 0) {
+							logger.debugError(() => `Unable to find existing snapshot version: ${snapshot.hashCode}.`)
+							return
+						}
+
+						settings.snapshots[snapshotIndexToUpdate] = snapshot.toGlobalLightJSON().settingsJson
+					})
+				}
+
+				// update frontmatter after global snapshot update to avoid loosing data due to component refresh
+				await app.fileManager.processFrontMatter(
 					habit.file,
 					(frontmatter) => {
 						const habitOrderField = state.settings.habitOrderField

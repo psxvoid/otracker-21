@@ -9,8 +9,6 @@ export interface HabitLightSnapshot {
 	path: string
 
 	title?: string
-	firstPassOrder: number
-	secondPassOrder?: number
 }
 
 export interface HabitFullSnapshot extends HabitLightSnapshot {
@@ -66,8 +64,6 @@ function toLightSnapshot(habit: HabitData, habitName: string): HabitLightSnapsho
 		? habit.title
 		: ''
 
-	const { firstPassOrder, secondPassOrder } = habit
-
 	const { path, basename } = habit.file
 
 	return {
@@ -75,8 +71,6 @@ function toLightSnapshot(habit: HabitData, habitName: string): HabitLightSnapsho
 		basename,
 
 		title,
-		firstPassOrder,
-		secondPassOrder,
 	}
 }
 
@@ -102,8 +96,7 @@ function toHabitData(habitSnapshot: HabitLightSnapshot, app: App): HabitData {
 	return {
 		file,
 		title: habitSnapshot.title,
-		firstPassOrder: habitSnapshot.firstPassOrder,
-		secondPassOrder: habitSnapshot.secondPassOrder,
+		firstPassOrder: 0
 	}
 }
 
@@ -117,13 +110,18 @@ function getStringHashCode(value: string, initValue: number = 13): number {
 	return hashCode
 }
 
-function computeHabitDataHashCode(habits: readonly HabitData[]): number {
+function computeHabitDataHashCode(habits: readonly HabitData[], ignoreOrder: boolean): number {
 	let hashCode = 3 * habits.length
 
 	for (let i = 0; i < habits.length; i++) {
 		const { file, firstPassOrder, secondPassOrder } = habits[i]
 
-		let pathHashCode = 13 * file.basename.length + firstPassOrder * 17 + (secondPassOrder ?? 0) * 19
+		let pathHashCode = 13 * file.basename.length
+		
+		if (!ignoreOrder) {
+			pathHashCode = firstPassOrder * 17 + (secondPassOrder ?? 0) * 19
+		}
+
 		for (let j = 0; j < file.basename.length; j++) {
 			pathHashCode += file.basename.charCodeAt(j) * 23
 		}
@@ -207,7 +205,7 @@ export class Snapshot {
 
 	setHabits(habits: readonly HabitData[]): void {
 		this._habits = habits
-		this._habitsHashCode = computeHabitDataHashCode(habits)
+		this._habitsHashCode = computeHabitDataHashCode(habits, this.type === SnapshotType.GlobalLight)
 	}
 
 	setEntries(habitFile: TFile, entries: readonly HabitEntry[]): void {
