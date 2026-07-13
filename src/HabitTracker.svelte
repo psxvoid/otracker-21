@@ -768,7 +768,7 @@
 				{#if snapshot.isParsed && lazySnapshot != null && lazySnapshot.hashCode !== snapshot.hashCode }
 					<!-- svelte-ignore a11y-click-events-have-key-events -->
 					<!-- svelte-ignore a11y-no-static-element-interactions -->
-					<span style="background:red" on:click={onInvalidateClick}>SNAPSHOT IS OUTDATED</span>
+					<span style="background:red" on:click={onInvalidateClick}>SNAPSHOT VIEW</span>
 				{/if}
 			</div>
 			{#each state.computed.dates as date}
