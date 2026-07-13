@@ -114,12 +114,12 @@ function computeHabitDataHashCode(habits: readonly HabitData[], ignoreOrder: boo
 	let hashCode = 3 * habits.length
 
 	for (let i = 0; i < habits.length; i++) {
-		const { file, firstPassOrder, secondPassOrder } = habits[i]
+		const { file } = habits[i]
 
 		let pathHashCode = 13 * file.basename.length
 		
 		if (!ignoreOrder) {
-			pathHashCode = firstPassOrder * 17 + (secondPassOrder ?? 0) * 19
+			pathHashCode = (i + 1) * 17
 		}
 
 		for (let j = 0; j < file.basename.length; j++) {
