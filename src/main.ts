@@ -14,6 +14,7 @@ import { StringUtils } from './utils/StringUtils'
 import { saveCodeBlock } from './utils/ObsidianCodeBlock'
 import { VaultEventType } from './utils/ObsidianHelpers'
 import { getFrontmatter } from './HabitLoader'
+import { HabitLightSnapshot } from './core/Snapshot'
 
 type Destroyable = { $destroy: () => void }
 
@@ -209,24 +210,25 @@ export default class HabitTracker21 extends Plugin {
 		// Add the settings tab
 		this.addSettingTab(new HabitTrackerSettingTab(this.app, this));
 
-		const onRenameHandler = async (file: TAbstractFile, oldPath?: string) => {
+		const globalSnapshotBaseHandler = async (
+			file: TAbstractFile,
+			morph: (habit: HabitLightSnapshot, file: TFile) => Promise<HabitLightSnapshot>,
+			) => {
 			if (typeof this.settings?.snapshots?.length === 'number' && file instanceof TFile) {
 				let hasSnapshotUpdates = false
 				const updatedSnapshots = await Promise.all(this.settings.snapshots.map(async x => {
 					let hasHabitUpdates = false
 					const habitsToUpdate = await Promise.all(x.habits.map(async habit => {
-						if (habit.path !== oldPath) {
-							return habit
+						const updatedHabit = await morph(habit, file)
+
+						if (updatedHabit !== habit) {
+							hasSnapshotUpdates = true
+							hasHabitUpdates = true
+
+							return updatedHabit
 						}
 
-						hasSnapshotUpdates = true
-						hasHabitUpdates = true
-
-						return {
-							...habit,
-							basename: file.basename,
-							path: file.path,
-						}
+						return habit
 					}))
 
 					return !hasHabitUpdates
@@ -243,45 +245,40 @@ export default class HabitTracker21 extends Plugin {
 				}
 			}
 		}
-		const onModifyHandler = async (file: TAbstractFile) => {
-			if (typeof this.settings?.snapshots?.length === 'number' && file instanceof TFile) {
-				let hasSnapshotUpdates = false
-				const updatedSnapshots = await Promise.all(this.settings.snapshots.map(async x => {
-					let hasHabitUpdates = false
-					const habitsToUpdate = await Promise.all(x.habits.map(async habit => {
-						if (habit.path !== file.path) {
-							return habit
-						}
 
-						hasSnapshotUpdates = true
-						hasHabitUpdates = true
+		const onRenameHandler = async (abstractFile: TAbstractFile, oldPath?: string) => globalSnapshotBaseHandler(
+			abstractFile,
+			async (habit, tFile) => habit.path !== oldPath
+				? habit
+				: {
+					...habit,
+					basename: tFile.basename,
+					path: tFile.path,
+				})
 
-						const fm = await getFrontmatter(file, this.logger.scoped(() => 'getFrontmatter'), this.app, true, 1)
-
-						if (fm.title === habit.title) {
-							return habit
-						}
-
-						return {
-							...habit,
-							title: fm.title
-						}
-					}))
-
-					return !hasHabitUpdates
-						? x
-						: {
-							...x,
-							habits: habitsToUpdate
-						}
-				}))
-
-				if (hasSnapshotUpdates) {
-					this.settings.snapshots = updatedSnapshots
-					await this.saveSettings()
+		const onModifyHandler = async (abstractFile: TAbstractFile) => globalSnapshotBaseHandler(
+			abstractFile,
+			async (habit, file) => {
+				if (habit.path !== file.path) {
+					return habit
 				}
-			}
-		}
+
+				const fm = await getFrontmatter(file, this.logger.scoped(() => 'get-fm-on-mod'), this.app, true, 1)
+
+				let frontmatterChanges: Partial<HabitLightSnapshot> | undefined
+
+				if (fm.title !== habit.title) {
+					frontmatterChanges = frontmatterChanges ?? {}
+					frontmatterChanges.title = fm.title
+				}
+
+				return frontmatterChanges == null
+					? habit
+					: {
+						...habit,
+						...frontmatterChanges
+					}
+			})
 
 		const subscribeToVaultEvents = (target: VaultEventType, handler: (file: TAbstractFile, oldPath?: string) => unknown) => {
 			const eventRef = this.app.vault.on(target as 'rename', handler)
