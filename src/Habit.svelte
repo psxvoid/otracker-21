@@ -220,15 +220,15 @@
 				'habit-tick',
 			]
 			if (day.ticked) cls.push('habit-tick--ticked')
+			const inStrk = day.ticked || day.gap
+			if (inStrk) cls.push('habit-tick--streak')
+			if (day.gap && !day.ticked) {
+				cls.push('habit-tick--streak-gap')
+				cls.push(gapStyle === 'faded' ? 'habit-tick--gap-faded' : 'habit-tick--gap-default')
+			}
+			if (day.streakStart) cls.push('habit-tick--streak-start')
+			if (day.streakEnd) cls.push('habit-tick--streak-end')
 			if (showStreaks) {
-				const inStrk = day.ticked || day.gap
-				if (inStrk) cls.push('habit-tick--streak')
-				if (day.gap && !day.ticked) {
-					cls.push('habit-tick--streak-gap')
-					cls.push(gapStyle === 'faded' ? 'habit-tick--gap-faded' : 'habit-tick--gap-default')
-				}
-				if (day.streakStart) cls.push('habit-tick--streak-start')
-				if (day.streakEnd) cls.push('habit-tick--streak-end')
 				if (day.streakCount > 0 && !day.streakEnd)
 					cls.push('habit-tick--streak-count')
 				if (day.deadline) cls.push('habit-tick--streak-deadline')
