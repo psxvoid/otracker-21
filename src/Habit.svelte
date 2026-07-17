@@ -31,6 +31,7 @@
 	let savingChanges = false // this helps the file change listner know if we made a change. if not, it reloads the data for the habit
 	let logger = new DebugLog(() => globalSettings, () => 'Habit')
 	let mergedSettings: HabitTrackerMergedSettings
+	let hideStreak = false
 
 	const enum ClickAction {
 		TickIncrement,
@@ -56,6 +57,7 @@
 		const gapStyle = mergedSettings.gapStyle
 				
 		// Pass 1 — mark each date
+		let hasCounter = false
 		const days = dates.map((date) => {
 			const ticked = entrySet.has(date)
 			const dateParsed = parseEntry(date)
@@ -67,7 +69,9 @@
 				const currentDateIdx = HabitEntryUtils.indexOf(entries, dateParsed)
 				const currentEntry = entries[currentDateIdx]
 
-				habitCount = currentEntry.type === EntryType.Counter
+				const isCounter = currentEntry.type === EntryType.Counter
+				hasCounter = hasCounter || isCounter
+				habitCount = isCounter
 					? currentEntry.counter
 					: 1
 			}
@@ -102,6 +106,8 @@
 				habitCount,
 			}
 		})
+
+		hideStreak = hasCounter && mergedSettings.hideStreaksForCounters
 
 		// Pass 2 — identify streak boundaries and counts
 		let streakStartIdx = -1
@@ -508,7 +514,7 @@
 				<span
 					class="habit-tick__inner"
 				>
-				{#if day.habitCount < 2 && showStreaks && day.streakEnd && day.streakCount > 1}{day.streakCount}{/if}
+				{#if day.habitCount < 2 && showStreaks && !hideStreak && day.streakEnd && day.streakCount > 1}{day.streakCount}{/if}
 				{#if day.habitCount > 1}{day.habitCount}{/if}
 			</span>
 			</div>

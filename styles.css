@@ -525,3 +525,8 @@ body:not(.is-readable-line-width) .block-language-habittracker:has(.habit-tracke
 .theme-light .ot21-tap {
 	background: rgba(0, 0, 0, 0.5);
 }
+
+.ot21-settings .is-disabled {
+	pointer-events: none;
+	opacity: 0.2;
+}

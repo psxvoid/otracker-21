@@ -517,6 +517,7 @@ class HabitTrackerSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		containerEl.createEl('h3', { text: `${this.plugin.manifest.name} Settings` });
+		containerEl.classList.add('ot21-settings')
 
 		// General Settings Section
 		let generalHeader = containerEl.createEl('h4', { text: 'General Settings' });
@@ -613,6 +614,8 @@ class HabitTrackerSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
+		let streakAutoHideSetting: Setting
+
 		new Setting(containerEl)
 			.setName('Show streaks')
 			.setDesc('Display streak indicators and counts. Can be overridden with "showStreaks" in code blocks.')
@@ -620,8 +623,20 @@ class HabitTrackerSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.showStreaks)
 				.onChange(async (value) => {
 					this.plugin.settings.showStreaks = value;
+					streakAutoHideSetting.setDisabled(!value)
 					await this.plugin.saveSettings();
-				}));
+				}))
+		
+			streakAutoHideSetting = new Setting(containerEl)
+			.setName('Streak Auto-Hide')
+			.setDesc('Hide streak indicators for habits that has counters, show otherwise.')
+			.setDisabled(!this.plugin.settings.showStreaks)
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.hideStreaksForCounters)
+				.onChange(async (value) => {
+					this.plugin.settings.hideStreaksForCounters = value;
+					await this.plugin.saveSettings();
+				}))
 
 		new Setting(containerEl)
 			.setName('Gap style')
