@@ -37,6 +37,7 @@ export interface HabitTrackerSettings {
 	matchLineLength: boolean
 	defaultColor: string
 	showStreaks: boolean
+	hideStreaksForCounters: boolean
 	openDailyNoteOnClick: boolean
 	gapStyle: string
 	updateCheckEnabled: boolean
@@ -70,6 +71,7 @@ export const DEFAULT_SETTINGS: HabitTrackerSettings = {
 	matchLineLength: true,
 	defaultColor: '',
 	showStreaks: true,
+	hideStreaksForCounters: true,
 	openDailyNoteOnClick: true,
 	gapStyle: 'default',
 	updateCheckEnabled: false,
