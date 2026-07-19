@@ -6,6 +6,23 @@ interface HabitOrderUpdate {
 	newIndex?: number
 }
 
+const enum DragDirection {
+	Unchanged,
+	Up,
+	Down,
+}
+
+function getDirectionDebugName(direction: DragDirection): string {
+	switch(direction) {
+		case DragDirection.Unchanged:
+			return 'unchanged'
+		case DragDirection.Up:
+			return 'up'
+		case DragDirection.Down:
+			return 'down'
+	}
+}
+
 const computeFmOrder = (habit: HabitData, newOrder: number) => habit.firstPassOrder === newOrder ? undefined : newOrder;
 
 export class DragAndDropController {
@@ -112,6 +129,14 @@ export class DragAndDropController {
 
 		const habitOrderBefore = habit.secondPassOrder ?? this.dragHabitIndexBeforeDrag + 1
 		const newIndex = computeFmOrder(habit, indexIncremented)
+		const indexDiff = habitOrderBefore - indexIncremented
+		const direction = indexDiff === 0
+			? DragDirection.Unchanged
+			: indexDiff < 0
+			? DragDirection.Down
+			: DragDirection.Up
+
+		this.logger.debugLog(() => `Habit order direction: ${getDirectionDebugName(direction)}`)
 
 		// items "above" this row are unaffected
 		const upperBorderLineIndex = Math.min(indexIncremented, habitOrderBefore) - 1
@@ -143,7 +168,7 @@ export class DragAndDropController {
 				// prevents the last habit to go out of bounds
 				newIndex = totalHabits - 1
 			} else {
-				if (secondPassOrder <= indexIncremented) {
+				if (secondPassOrder < indexIncremented || (secondPassOrder === indexIncremented && direction === DragDirection.Down)) {
 					// update all habits that are above
 					newIndex = secondPassOrder - 1
 				} else {
